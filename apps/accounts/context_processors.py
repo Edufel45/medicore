@@ -45,35 +45,40 @@ ROLE_COLORS = {
     "accounts": "#64748b",
 }
 
-# Navigation items per role — mirrors the HTML prototype
+# Navigation items per role — mirrors the HTML prototype.
+# Only include links whose URL routes actually exist.
+# Missing routes (like /ledger/, /claims/) are hidden until Phase 6/7.
 NAV_BY_ROLE = {
     "reception": [
-        {"key": "home",  "label": "Home",  "icon": "🏠"},
-        {"key": "queue", "label": "Queue", "icon": "🧭"},
+        {"key": "",         "label": "Home",     "icon": "🏠"},
+        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
+        {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "nurse": [
-        {"key": "home",  "label": "Home",  "icon": "🏠"},
-        {"key": "queue", "label": "Queue", "icon": "🧭"},
+        {"key": "",         "label": "Home",     "icon": "🏠"},
+        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
+        {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "doctor": [
-        {"key": "home",  "label": "Home",       "icon": "🏠"},
-        {"key": "queue", "label": "Queue",      "icon": "🧭"},
-        {"key": "inbox", "label": "Lab results", "icon": "📥"},
+        {"key": "",         "label": "Home",      "icon": "🏠"},
+        {"key": "queue",    "label": "Queue",     "icon": "🧭"},
+        {"key": "lab/inbox","label": "Lab inbox", "icon": "📥"},
+        {"key": "patients", "label": "Patients",  "icon": "👥"},
     ],
     "lab": [
-        {"key": "home",  "label": "Home",  "icon": "🏠"},
-        {"key": "queue", "label": "Queue", "icon": "🧭"},
+        {"key": "",         "label": "Home",     "icon": "🏠"},
+        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
+        {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "pharmacy": [
-        {"key": "home",  "label": "Home",  "icon": "🏠"},
-        {"key": "queue", "label": "Queue", "icon": "🧭"},
+        {"key": "",         "label": "Home",     "icon": "🏠"},
+        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
+        {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "accounts": [
-        {"key": "home",     "label": "Home",     "icon": "🏠"},
-        {"key": "ledger",   "label": "Ledger",   "icon": "📒"},
-        {"key": "claims",   "label": "Claims",   "icon": "📋"},
+        {"key": "",         "label": "Home",     "icon": "🏠"},
         {"key": "audit",    "label": "Audit",    "icon": "🕵️"},
-        {"key": "insights", "label": "Insights", "icon": "📊"},
+        {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
 }
 
@@ -107,7 +112,7 @@ def role_context(request):
     except Exception:
         role_key = None
 
-    # Superuser without group -> treat as accounts (safe read-only view)
+    # Superuser without group -> treat as accountant (safe read-only view)
     if role_key is None and user.is_superuser:
         role_key = "accounts"
 

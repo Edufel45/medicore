@@ -14,8 +14,11 @@ urlpatterns = [
     # Accounts — login, logout, home, audit
     path("", include("apps.accounts.urls", namespace="accounts")),
 
-    # Patients — registration
+    # Patients — registration + list
     path("patients/", include("apps.patients.urls", namespace="patients")),
+
+    # Clinical — queue, visits, lab inbox
+    path("", include("apps.clinical.urls", namespace="clinical")),
 ]
 
 if settings.DEBUG:

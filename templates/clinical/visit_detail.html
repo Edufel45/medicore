@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+{% block title %}{{ visit.queue_number }} · {{ patient.full_name }} — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .wb-split { display: grid; grid-template-columns: 260px 1fr; gap: 14px; align-items: start; }
+    @media (max-width: 900px) { .wb-split { grid-template-columns: 1fr; } }
+    .id-card {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+      background: var(--soft, #f8fafc); border: 1px solid var(--line);
+      border-radius: 12px; padding: 12px 14px; margin: 10px 0;
+    }
+    .id-card .field small {
+      display: block; font-size: .68rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .5px;
+      font-weight: 800; margin-bottom: 2px;
+    }
+    .id-card .field b { font-size: .9rem; }
+    .id-card .field.mono b {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      color: var(--teal2, #0b8a73);
+    }
+    .path { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+    .path .chip {
+      background: rgba(15,166,138,.15); color: var(--teal2, #0b8a73);
+      border-radius: 99px; padding: 3px 10px; font-size: .7rem; font-weight: 700;
+    }
+    .panel {
+      border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+      margin-top: 12px; background: var(--card);
+    }
+    .panel.soft { background: var(--soft, #f8fafc); }
+    .panel-title {
+      font-size: .78rem; text-transform: uppercase; letter-spacing: .5px;
+      color: var(--muted); font-weight: 800; margin-bottom: 10px;
+    }
+    .badge {
+      display: inline-block; border-radius: 99px; padding: 2px 10px;
+      font-size: .7rem; font-weight: 800; white-space: nowrap;
+    }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-inactive { background: #fde4e1; color: #8f2a1e; }
+    .b-pending  { background: #fff0d1; color: #7a4a00; }
+    .b-n        { background: #e9eef4; color: #475569; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .b-info     { background: #e2eefc; color: #0b4a8f; }
+    .form-input {
+      width: 100%; padding: 9px 11px; border: 1.5px solid var(--line);
+      border-radius: 9px; font: inherit; background: var(--card); color: var(--ink);
+    }
+    .form-input:focus { outline: 0; border-color: var(--teal); }
+    label { display: block; font-size: .72rem; font-weight: 700; color: var(--muted); margin: 0 0 4px; }
+    .btn-teal {
+      background: var(--teal); color: #fff; border: 0; border-radius: 10px;
+      padding: 11px 18px; font-weight: 700; cursor: pointer;
+    }
+    .btn-teal:hover { background: var(--teal2, #0b8a73); }
+    .btn-o {
+      background: var(--card); color: var(--blue, #1664B0);
+      border: 1.5px solid var(--line); border-radius: 10px;
+      padding: 10px 16px; font-weight: 700; cursor: pointer;
+      text-decoration: none; display: inline-block;
+    }
+    .btn-o:hover { background: var(--soft); }
+    .btn-sm { padding: 6px 11px; font-size: .8rem; border-radius: 8px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .row:last-child { border: 0; }
+    .row .l b { display: block; }
+    .row .l span { color: var(--muted); font-size: .78rem; }
+    .al { border-left: 4px solid var(--warn, #B76E00); background: var(--soft, #f8fafc); border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; font-size: .84rem; }
+    .al.g { border-color: var(--teal); background: rgba(15,166,138,.08); }
+    .al.r { border-color: var(--bad, #C0392B); background: rgba(192,57,43,.08); }
+    .al.i { border-color: var(--blue, #1664B0); background: rgba(22,100,176,.08); }
+    .rx-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--soft); border: 1px solid var(--line);
+      border-radius: 10px; padding: 8px 12px; margin-bottom: 6px;
+    }
+    .rx-item b { font-weight: 700; }
+    .rx-item .meta { font-size: .75rem; color: var(--muted); margin-left: 8px; }
+    .rx-remove {
+      border: 0; background: transparent; color: var(--bad, #C0392B);
+      font-weight: 900; font-size: 1.1rem; padding: 2px 8px; border-radius: 6px; cursor: pointer;
+    }
+    .rx-remove:hover { background: rgba(192,57,43,.1); }
+    .lab-result {
+      background: rgba(15,166,138,.08); border: 1px solid rgba(15,166,138,.4);
+      border-radius: 12px; padding: 12px 14px; margin-top: 12px;
+    }
+    .lab-result .title {
+      font-weight: 800; color: var(--teal2, #0b8a73); font-size: .85rem;
+      margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .lab-result .r-row {
+      display: flex; justify-content: space-between; padding: 6px 0;
+      border-bottom: 1px dashed rgba(15,166,138,.3); font-size: .88rem;
+    }
+    .lab-result .r-row:last-child { border: 0; }
+    .lab-result .r-row .val { font-family: ui-monospace, monospace; }
+    .drug-tag {
+      border: 1.5px solid var(--line); border-radius: 99px;
+      padding: 5px 12px; font-size: .78rem; font-weight: 600;
+      background: var(--card); cursor: pointer; color: var(--ink);
+      display: inline-block; margin: 0 6px 6px 0;
+    }
+    .drug-tag:hover { border-color: var(--teal); }
+    .drug-tag.on { background: var(--teal); border-color: var(--teal); color: #fff; }
+  </style>
+
+  <div class="wb-split">
+
+    {# ---------- LEFT ---------- #}
+    <div class="card">
+      <h2 style="margin-top:0;font-size:.95rem">Quick links</h2>
+      <a class="btn-o btn-sm" href="{% url 'clinical:queue' %}" style="width:100%;text-align:center;margin-bottom:6px">
+        ← Queue board
+      </a>
+      {% if user_role == "doctor" or user_role == "admin" %}
+        <a class="btn-o btn-sm" href="{% url 'clinical:lab_inbox' %}" style="width:100%;text-align:center">
+          📥 Lab inbox
+        </a>
+      {% endif %}
+    </div>
+
+    {# ---------- RIGHT ---------- #}
+    <div>
+      <div class="card">
+
+        {# ----- Header ----- #}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <span style="font-family:ui-monospace,monospace;font-size:.85rem;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:3px 10px;color:var(--teal2);font-weight:800">{{ patient.sid }}</span>
+            <h1 style="margin-top:6px">
+              {{ patient.full_name }}
+              <span class="badge {{ patient.sha_badge_class }}">
+                {% if patient.sha_status == "active" %}✓ SHA Active
+                {% elif patient.sha_status == "inactive" %}✗ SHA Inactive
+                {% elif patient.sha_status == "pending" %}⏳ SHA Pending
+                {% else %}? SHA Unknown{% endif %}
+              </span>
+            </h1>
+            <p class="sub" style="margin:0">
+              {{ visit.queue_number }} ·
+              {% if patient.national_id %}NID {{ patient.national_id }} · {% endif %}
+              {{ patient.phone }} ·
+              {{ patient.age|default:"?" }}y {{ patient.sex }} ·
+              {{ visit.reason_for_visit|default:"—" }}
+            </p>
+          </div>
+          <span class="badge b-t">Now: {{ visit.get_stage_display }}</span>
+        </div>
+
+        {# ----- Journey chips ----- #}
+        <div class="path">
+          <span class="chip">Started {{ visit.started_at|date:"H:i" }}</span>
+          <span style="color:var(--muted)">·</span>
+          <span class="chip">Waiting {{ wait_min }} min</span>
+          <span style="color:var(--muted)">·</span>
+          <span class="chip">
+            Reg fee: {% if visit.registration_fee_paid %}✓ Paid{% else %}⏳ Unpaid{% endif %}
+          </span>
+        </div>
+
+        {# ----- Identity card ----- #}
+        <div class="id-card">
+          <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+          <div class="field mono"><small>National ID</small><b>{{ patient.national_id|default:"—" }}</b></div>
+          <div class="field mono"><small>Phone</small><b>{{ patient.phone }}</b></div>
+          <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+          <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+          <div class="field mono"><small>SHA</small><b>{{ patient.sha_number|default:"—" }}</b></div>
+        </div>
+
+        {# ============================================================ #}
+        {# NURSE PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "nurse" or user_role == "admin" or vitals %}
+          <div class="panel">
+            <div class="panel-title">
+              Vitals
+              {% if visit.stage == "nurse" %}<span class="badge b-pending">Requested by doctor</span>{% endif %}
+            </div>
+
+            {% if user_role == "nurse" or user_role == "admin" %}
+              {% if visit.stage == "nurse" %}
+                <form method="post" action="{% url 'clinical:save_vitals' visit.queue_number %}">
+                  {% csrf_token %}
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+                    <div><label>Blood pressure</label><input class="form-input" name="blood_pressure" value="{{ vitals.blood_pressure|default:'' }}" placeholder="e.g. 120/80"></div>
+                    <div><label>Temp (°C)</label><input class="form-input" name="temperature_c" value="{{ vitals.temperature_c|default:'' }}" placeholder="e.g. 36.8"></div>
+                    <div><label>Weight (kg)</label><input class="form-input" name="weight_kg" value="{{ vitals.weight_kg|default:'' }}" placeholder="e.g. 70"></div>
+                    <div><label>Pulse (bpm)</label><input class="form-input" name="pulse_bpm" value="{{ vitals.pulse_bpm|default:'' }}" placeholder="e.g. 76"></div>
+                  </div>
+                  <button type="submit" class="btn-teal" style="margin-top:12px">Save vitals · send back to doctor →</button>
+                </form>
+              {% else %}
+                <div class="al g">Vitals already sent to doctor.</div>
+                {% if vitals %}
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px">
+                    <div><small style="color:var(--muted);font-size:.7rem">BP</small><br><b>{{ vitals.blood_pressure|default:"—" }}</b></div>
+                    <div><small style="color:var(--muted);font-size:.7rem">Temp</small><br><b>{{ vitals.temperature_c|default:"—" }} °C</b></div>
+                    <div><small style="color:var(--muted);font-size:.7rem">Weight</small><br><b>{{ vitals.weight_kg|default:"—" }} kg</b></div>
+                    <div><small style="color:var(--muted);font-size:.7rem">Pulse</small><br><b>{{ vitals.pulse_bpm|default:"—" }} bpm</b></div>
+                  </div>
+                {% endif %}
+              {% endif %}
+            {% else %}
+              {% if vitals %}
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+                  <div><small style="color:var(--muted);font-size:.7rem">BP</small><br><b>{{ vitals.blood_pressure|default:"—" }}</b></div>
+                  <div><small style="color:var(--muted);font-size:.7rem">Temp</small><br><b>{{ vitals.temperature_c|default:"—" }} °C</b></div>
+                  <div><small style="color:var(--muted);font-size:.7rem">Weight</small><br><b>{{ vitals.weight_kg|default:"—" }} kg</b></div>
+                  <div><small style="color:var(--muted);font-size:.7rem">Pulse</small><br><b>{{ vitals.pulse_bpm|default:"—" }} bpm</b></div>
+                </div>
+              {% else %}
+                <p class="sub" style="margin:0">No vitals recorded.</p>
+              {% endif %}
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ============================================================ #}
+        {# DOCTOR PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "doctor" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">Consultation{% if visit.stage == "doctor" %} · you are here{% endif %}</div>
+
+            {% if visit.stage == "doctor" or visit.stage == "lab" %}
+
+              {# ----- Diagnosis form ----- #}
+              <form method="post" action="{% url 'clinical:save_diagnosis' visit.queue_number %}">
+                {% csrf_token %}
+                <label>Diagnosis</label>
+                <input class="form-input" name="diagnosis" value="{{ diagnosis.text|default:'' }}" placeholder="Type diagnosis or ICD code…">
+                <button type="submit" class="btn-o btn-sm" style="margin-top:8px">Save diagnosis</button>
+              </form>
+
+              {# ----- Prescriptions ----- #}
+              <div class="panel soft" style="margin-top:14px">
+                <div class="panel-title" style="margin:0 0 8px">
+                  Prescription
+                  <span class="badge b-n" style="margin-left:6px">{{ prescriptions|length }}</span>
+                </div>
+
+                {% if prescriptions %}
+                  {% for rx in prescriptions %}
+                    <div class="rx-item">
+                      <div>
+                        <b>{{ rx.drug_name_typed }}</b>
+                        {% if rx.drug %}<span class="meta">→ Ksh {{ rx.drug.price_ksh }}</span>{% endif %}
+                        {% if rx.is_dispensed %}<span class="badge b-active" style="margin-left:8px">✓ Dispensed</span>{% endif %}
+                      </div>
+                      {% if not rx.is_dispensed and visit.stage == "doctor" %}
+                        <form method="post" action="{% url 'clinical:remove_prescription' visit.queue_number rx.id %}" style="margin:0">
+                          {% csrf_token %}
+                          <button type="submit" class="rx-remove" title="Remove">×</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <p class="sub" style="margin:0 0 8px">No drugs prescribed yet.</p>
+                {% endif %}
+
+                {% if visit.stage == "doctor" %}
+                  <form method="post" action="{% url 'clinical:add_prescription' visit.queue_number %}" style="display:flex;gap:8px;margin-top:10px">
+                    {% csrf_token %}
+                    <input class="form-input" name="drug_name" placeholder="Type drug name, e.g. amoxicillin 500mg" autocomplete="off" required>
+                    <button type="submit" class="btn-teal">Add</button>
+                  </form>
+                {% endif %}
+              </div>
+
+              {# ----- Lab orders ----- #}
+              <div class="panel soft" style="margin-top:14px">
+                <div class="panel-title" style="margin:0 0 8px">
+                  Lab orders
+                  <span class="badge b-n" style="margin-left:6px">{{ lab_tests|length }}</span>
+                </div>
+
+                {% if lab_tests %}
+                  {% for lt in lab_tests %}
+                    <div class="row">
+                      <div class="l">
+                        <b>{{ lt.name }}</b>
+                        <span>Ksh {{ lt.price_ksh }} · {% if lt.status == "released" %}Result released{% else %}{{ lt.get_status_display }}{% endif %}</span>
+                      </div>
+                      <span class="badge {% if lt.status == 'released' %}b-active{% else %}b-pending{% endif %}">
+                        {% if lt.status == "released" %}✓ Done{% else %}⏳ Pending{% endif %}
+                      </span>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <p class="sub" style="margin:0 0 8px">No lab tests ordered.</p>
+                {% endif %}
+
+                {% if visit.stage == "doctor" %}
+                  <form method="post" action="{% url 'clinical:add_lab_order' visit.queue_number %}" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                    {% csrf_token %}
+                    <input class="form-input" name="test_name" placeholder="e.g. Malaria test, Urinalysis, Blood sugar" style="flex:1;min-width:200px" required>
+                    <input class="form-input" name="test_price" type="number" placeholder="Ksh" value="300" style="width:100px">
+                    <button type="submit" class="btn-teal">Order</button>
+                  </form>
+                {% endif %}
+              </div>
+
+              {# ----- Lab results inline ----- #}
+              {% if visit.stage == "doctor" %}
+                {% for lt in lab_tests %}
+                  {% if lt.status == "released" and lt.result %}
+                    <div class="lab-result">
+                      <div class="title">
+                        <span>🧪 Lab result — {{ lt.name }}</span>
+                        <span class="badge b-active">✓ Reviewed</span>
+                      </div>
+                      <div class="r-row">
+                        <span><b>Result</b></span>
+                        <span class="val">{{ lt.result.value }}</span>
+                      </div>
+                      {% if lt.result.notes %}
+                        <div class="r-row">
+                          <span>Notes</span>
+                          <span>{{ lt.result.notes }}</span>
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+
+              {# ----- Routing ----- #}
+              <div style="margin-top:14px">
+                <label>Send patient to…</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+                  {% if visit.stage == "doctor" %}
+                    {% if lab_tests %}
+                      <form method="post" action="{% url 'clinical:send_to_lab' visit.queue_number %}" style="display:inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-teal">🔬 Send to Lab</button>
+                      </form>
+                    {% endif %}
+                    {% if prescriptions %}
+                      <form method="post" action="{% url 'clinical:send_to_pharmacy' visit.queue_number %}" style="display:inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-teal">💊 Send to Pharmacy</button>
+                      </form>
+                    {% endif %}
+                    {% if not vitals %}
+                      <form method="post" action="{% url 'clinical:request_vitals' visit.queue_number %}" style="display:inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-o">🩺 Request vitals</button>
+                      </form>
+                    {% endif %}
+                  {% else %}
+                    <p class="sub" style="margin:0">Patient is currently at {{ visit.get_stage_display }}.</p>
+                  {% endif %}
+                </div>
+              </div>
+            {% else %}
+              <p class="sub" style="margin:0">Patient is currently at {{ visit.get_stage_display }}.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ============================================================ #}
+        {# LAB PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "lab" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">Laboratory{% if visit.stage == "lab" %} · you are here{% endif %}</div>
+            {% if lab_tests %}
+              {% for lt in lab_tests %}
+                <div class="row">
+                  <div class="l">
+                    <b>{{ lt.name }}</b>
+                    <span>
+                      {% if lt.status == "released" %}Result released to doctor
+                      {% else %}Awaiting result entry{% endif %}
+                    </span>
+                  </div>
+                  <span class="badge {% if lt.status == 'released' %}b-active{% else %}b-pending{% endif %}">
+                    {% if lt.status == "released" %}✓ Done{% else %}⏳ Pending{% endif %}
+                  </span>
+                </div>
+              {% endfor %}
+
+              {% if visit.stage == "lab" %}
+                <div style="margin-top:14px">
+                  <label for="labRes">Enter results (one per line, format "Test name: value")</label>
+                  <textarea class="form-input" id="labRes" name="lab_results" rows="4"
+                            placeholder="Malaria test: Negative&#10;Urinalysis: Normal&#10;Blood sugar: 5.4 mmol/L"></textarea>
+
+                  <form method="post" action="{% url 'clinical:release_lab_results' visit.queue_number %}" style="margin-top:10px">
+                    {% csrf_token %}
+                    <input type="hidden" name="lab_results" id="labResHidden">
+                    <button type="submit" class="btn-teal" onclick="document.getElementById('labResHidden').value=document.getElementById('labRes').value">
+                      ✓ Release results · send back to doctor
+                    </button>
+                  </form>
+                </div>
+              {% endif %}
+            {% else %}
+              <p class="sub" style="margin:0">No lab tests ordered.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ============================================================ #}
+        {# PHARMACY PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "pharmacy" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">Pharmacy{% if visit.stage == "pharmacy" %} · you are here{% endif %}</div>
+
+            {% if prescriptions %}
+              {% for rx in prescriptions %}
+                <div class="row">
+                  <div class="l">
+                    <b>{{ rx.drug_name_typed }}</b>
+                    <span>
+                      {% if rx.drug %}Ksh {{ rx.drug.price_ksh }} · stock {{ rx.drug.total_stock }}
+                      {% else %}New drug · needs price{% endif %}
+                    </span>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    {% if rx.drug %}
+                      <span class="badge b-active">✓ Priced</span>
+                    {% else %}
+                      <form method="post" action="{% url 'clinical:price_prescription' visit.queue_number rx.id %}" style="display:flex;gap:4px;margin:0">
+                        {% csrf_token %}
+                        <input class="form-input" name="price" type="number" placeholder="Ksh" style="width:90px;padding:6px 8px;font-size:.8rem">
+                        <button type="submit" class="btn-o btn-sm">Set price</button>
+                      </form>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p class="sub" style="margin:0">Nothing prescribed.</p>
+            {% endif %}
+
+            {% if bill %}
+              <div class="panel soft" style="margin-top:12px">
+                <div class="panel-title" style="margin:0 0 6px">Bill</div>
+                {% for li in bill.line_items.all %}
+                  <div class="row">
+                    <div class="l"><b>{{ li.label }}</b></div>
+                    <b>Ksh {{ li.amount }}</b>
+                  </div>
+                {% endfor %}
+                <div class="row" style="border-top:2px solid var(--line);padding-top:10px;margin-top:6px">
+                  <b>Total</b>
+                  <b>Ksh {{ bill.total_amount }}</b>
+                </div>
+                <div class="row">
+                  <span>Paid</span>
+                  <b style="color:{% if bill.paid_amount > 0 %}#14803C{% else %}#B76E00{% endif %}">
+                    Ksh {{ bill.paid_amount }}
+                  </b>
+                </div>
+                <div class="row">
+                  <span>Balance due</span>
+                  <b style="color:{% if bill.balance_due <= 0 %}#14803C{% else %}#C0392B{% endif %}">
+                    Ksh {{ bill.balance_due }}
+                  </b>
+                </div>
+              </div>
+
+              {% if visit.stage == "pharmacy" and bill.balance_due > 0 %}
+                <form method="post" action="{% url 'clinical:collect_payment' visit.queue_number %}" style="margin-top:12px">
+                  {% csrf_token %}
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <label style="margin:0;font-size:.72rem;font-weight:700;color:var(--muted)">Method</label>
+                    <select name="method" class="form-input" style="width:auto">
+                      <option value="mpesa">M-Pesa</option>
+                      <option value="cash">Cash</option>
+                    </select>
+                    <button type="submit" class="btn-teal">Collect Ksh {{ bill.balance_due }} &amp; complete →</button>
+                  </div>
+                </form>
+              {% elif visit.stage == "pharmacy" and bill.balance_due <= 0 %}
+                <div class="al g" style="margin-top:12px">Bill already settled. Patient can be discharged.</div>
+              {% endif %}
+            {% endif %}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+{% endblock %}

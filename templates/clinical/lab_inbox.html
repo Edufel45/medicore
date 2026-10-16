@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Lab inbox — MediCore{% endblock %}
+
+{% block content %}
+  <h1>Lab results inbox</h1>
+  <p class="sub">Patients returned from lab with results ready to review.</p>
+
+  <style>
+    .inbox-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+      transition: border-color .15s;
+    }
+    .inbox-card:hover { border-color: var(--teal); }
+    .inbox-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .inbox-sid {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: .85rem;
+      background: var(--soft, #f8fafc);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 3px 10px;
+      color: var(--teal2, #0b8a73);
+      font-weight: 800;
+    }
+    .lab-list {
+      background: rgba(15,166,138,.06);
+      border: 1px solid rgba(15,166,138,.3);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin: 10px 0;
+    }
+    .lab-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(15,166,138,.3);
+      font-size: .88rem;
+    }
+    .lab-row:last-child { border: 0; }
+    .lab-row .name { font-weight: 700; }
+    .lab-row .val {
+      font-family: ui-monospace, monospace;
+      color: var(--ink);
+    }
+    .badge {
+      display: inline-block;
+      border-radius: 99px;
+      padding: 2px 10px;
+      font-size: .7rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .b-info     { background: #e2eefc; color: #0b4a8f; }
+    .btn-teal {
+      background: var(--teal); color: #fff; border: 0; border-radius: 10px;
+      padding: 11px 18px; font-weight: 700; cursor: pointer; text-decoration: none;
+      display: inline-block;
+    }
+    .btn-teal:hover { background: var(--teal2, #0b8a73); }
+    .btn-o {
+      background: var(--card); color: var(--blue, #1664B0);
+      border: 1.5px solid var(--line); border-radius: 10px;
+      padding: 10px 16px; font-weight: 700; cursor: pointer; text-decoration: none;
+      display: inline-block;
+    }
+    .btn-o:hover { background: var(--soft); }
+  </style>
+
+  {% if inbox %}
+    {% for entry in inbox %}
+      <div class="inbox-card">
+        <div class="inbox-head">
+          <div>
+            <span class="inbox-sid">{{ entry.visit.patient.sid }}</span>
+            <h2 style="margin: 6px 0 2px; font-size: 1.1rem">
+              {{ entry.visit.queue_number }} · {{ entry.visit.patient.full_name }}
+            </h2>
+            <p class="sub" style="margin: 0; font-size: .85rem">
+              {{ entry.visit.patient.age|default:"?" }} yrs · {{ entry.visit.patient.sex }} ·
+              {% if entry.visit.patient.national_id %}NID {{ entry.visit.patient.national_id }} · {% endif %}
+              {{ entry.visit.patient.phone }}
+            </p>
+          </div>
+          <div style="display: flex; gap: 6px; flex-direction: column; align-items: flex-end">
+            <span class="badge b-t">Ready to review</span>
+            {% if entry.visit.patient.sha_status == "active" %}
+              <span class="badge b-active">✓ SHA Active</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="lab-list">
+          <div style="font-weight: 800; color: var(--teal2, #0b8a73); font-size: .85rem; margin-bottom: 6px">
+            🧪 Lab results
+          </div>
+          {% for lt in entry.released %}
+            <div class="lab-row">
+              <span class="name">{{ lt.name }}</span>
+              <span class="val">
+                {% if lt.result %}{{ lt.result.value }}{% else %}✓ Ready{% endif %}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <a class="btn-teal" href="{% url 'clinical:visit_detail' entry.visit.queue_number %}">
+            Review &amp; continue →
+          </a>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="card">
+      <p class="sub" style="margin: 0">Nothing to review. Lab results will appear here when the lab releases them.</p>
+    </div>
+  {% endif %}
+{% endblock %}
