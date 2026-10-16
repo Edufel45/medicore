@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Register patient — MediCore{% endblock %}
+
+{% block content %}
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <h1>Register a new patient</h1>
+  <p class="sub">Collect the Ksh 200 registration fee. SHA is verified live.</p>
+
+  <form method="post" class="card" style="max-width:640px">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="al r" style="margin-bottom:12px">{{ form.non_field_errors.0 }}</div>
+    {% endif %}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="grid-column:1 / -1">
+        <label for="{{ form.full_name.id_for_label }}">Full name</label>
+        {{ form.full_name }}
+        {% if form.full_name.errors %}<div class="al r" style="margin-top:6px">{{ form.full_name.errors.0 }}</div>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.national_id.id_for_label }}">National ID</label>
+        {{ form.national_id }}
+        {% if form.national_id.errors %}<div class="al r" style="margin-top:6px">{{ form.national_id.errors.0 }}</div>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.phone.id_for_label }}">Phone (M-Pesa)</label>
+        {{ form.phone }}
+        {% if form.phone.errors %}<div class="al r" style="margin-top:6px">{{ form.phone.errors.0 }}</div>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.sex.id_for_label }}">Sex</label>
+        {{ form.sex }}
+      </div>
+
+      <div>
+        <label for="{{ form.date_of_birth.id_for_label }}">Date of birth (preferred)</label>
+        {{ form.date_of_birth }}
+      </div>
+
+      <div>
+        <label for="{{ form.age_years.id_for_label }}">Age (years) — if DOB unknown</label>
+        {{ form.age_years }}
+      </div>
+
+      <div>
+        <label for="{{ form.sha_number.id_for_label }}">SHA number</label>
+        <input type="text"
+               name="{{ form.sha_number.name }}"
+               id="{{ form.sha_number.id_for_label }}"
+               value="{{ form.sha_number.value|default:'' }}"
+               placeholder="Try DEMO-1001, DEMO-2002, DEMO-3003"
+               autocomplete="off"
+               class="form-input"
+               hx-post="{% url 'patients:sha_verify' %}"
+               hx-trigger="keyup changed delay:400ms"
+               hx-target="#sha-result"
+               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+        {% if form.sha_number.errors %}<div class="al r" style="margin-top:6px">{{ form.sha_number.errors.0 }}</div>{% endif %}
+        <div id="sha-result"></div>
+      </div>
+
+      <div style="grid-column:1 / -1">
+        <label for="{{ form.reason_for_visit.id_for_label }}">Reason for visit</label>
+        {{ form.reason_for_visit }}
+      </div>
+
+      <div style="grid-column:1 / -1;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600">
+          {{ visit_form.collect_registration_fee }}
+          Collect Ksh 200 registration fee now (M-Pesa)
+        </label>
+      </div>
+    </div>
+
+    {% if form.errors or visit_form.errors %}
+      <div class="al r" style="margin-top:12px">
+        Please fix the errors above before saving.
+      </div>
+    {% endif %}
+
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button type="submit"
+              style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:12px 22px;font-weight:700;cursor:pointer">
+        Save &amp; assign queue number →
+      </button>
+      <a href="{% url 'accounts:home' %}"
+         style="background:var(--card);color:var(--blue);border:1.5px solid var(--line);border-radius:10px;padding:12px 22px;font-weight:700;text-decoration:none;display:inline-block">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+  <style>
+    input[type="text"], input[type="number"], input[type="date"], select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      font: inherit;
+      background: var(--card);
+      color: var(--ink);
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 0;
+      border-color: var(--teal);
+    }
+    label {
+      display: block;
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin: 0 0 4px;
+    }
+  </style>
+{% endblock %}

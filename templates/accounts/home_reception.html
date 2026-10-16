@@ -26,13 +26,29 @@
 
   <div class="card">
     <h2>Quick actions</h2>
-    <div class="row click" onclick="alert('Register patient — Phase 4')">
-      <div class="l"><b>➕ Register a new patient</b><span>Collect Ksh 200 · assign queue number</span></div>
+
+    <a class="row click" href="{% url 'patients:register' %}" style="text-decoration:none;color:inherit">
+      <div class="l">
+        <b>➕ Register a new patient</b>
+        <span>Collect Ksh 200 · assign queue number</span>
+      </div>
       →
-    </div>
-    <div class="row click" onclick="alert('Queue — Phase 4')">
-      <div class="l"><b>🧭 View queue</b><span>See who is waiting for triage / doctor</span></div>
+    </a>
+
+    <a class="row click" href="{% url 'patients:list' %}" style="text-decoration:none;color:inherit">
+      <div class="l">
+        <b>👥 Patients</b>
+        <span>Search &amp; view all registered patients</span>
+      </div>
       →
-    </div>
+    </a>
+
+    <a class="row click" href="/queue/" style="text-decoration:none;color:inherit">
+      <div class="l">
+        <b>🧭 View queue</b>
+        <span>See who is waiting for triage / doctor</span>
+      </div>
+      →
+    </a>
   </div>
 {% endblock %}

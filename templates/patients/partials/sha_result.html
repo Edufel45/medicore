@@ -1,0 +1,21 @@
+{% if empty %}
+  <p class="sub" style="margin:6px 0 0">Enter a SHA number to check eligibility.</p>
+{% elif result %}
+  {% if result.status == "active" %}
+    <div class="al g" style="margin-top:8px">
+      <b>✓ SHA Active</b> — {{ result.message }}
+    </div>
+  {% elif result.status == "inactive" %}
+    <div class="al r" style="margin-top:8px">
+      <b>✗ SHA Inactive</b> — {{ result.message }}
+    </div>
+  {% elif result.status == "pending" %}
+    <div class="al" style="margin-top:8px">
+      <b>⏳ SHA Pending</b> — {{ result.message }}
+    </div>
+  {% else %}
+    <div class="al" style="margin-top:8px">
+      <b>Status unknown</b> — {{ result.message }}
+    </div>
+  {% endif %}
+{% endif %}

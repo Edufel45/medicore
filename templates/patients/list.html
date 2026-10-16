@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Patients — MediCore{% endblock %}
+
+{% block content %}
+  <h1>Patients</h1>
+  <p class="sub">{{ total }} patient{{ total|pluralize }} in the system.</p>
+
+  <div class="card" style="margin-bottom:14px">
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" name="q" value="{{ q }}"
+             placeholder="Search by name, System ID, NID, phone, SHA…"
+             style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)">
+
+      <select name="scope" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        <option value="active" {% if scope == "active" %}selected{% endif %}>Active only</option>
+        <option value="all"    {% if scope == "all"    %}selected{% endif %}>Include inactive</option>
+      </select>
+
+      <button type="submit"
+              style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer">
+        Search
+      </button>
+
+      {% if q or scope != "active" %}
+        <a href="{% url 'patients:list' %}" style="color:var(--muted);text-decoration:none;padding:10px 12px">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="card">
+    {% if patients %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="text-align:left;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">
+            <th style="padding:8px 0">System ID</th>
+            <th>Name</th>
+            <th>NID</th>
+            <th>Phone</th>
+            <th>SHA</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in patients %}
+            <tr style="border-top:1px solid var(--line)">
+              <td style="padding:10px 0;font-family:ui-monospace,monospace;font-size:.78rem;color:var(--teal2);font-weight:700">{{ p.sid }}</td>
+              <td><b>{{ p.full_name }}</b> <small style="color:var(--muted)">· {{ p.age|default:"?" }} yrs {{ p.sex }}</small></td>
+              <td style="font-family:ui-monospace,monospace;font-size:.78rem">{{ p.national_id }}</td>
+              <td>{{ p.phone }}</td>
+              <td>
+                <span class="badge {{ p.sha_badge_class }}">
+                  {{ p.get_sha_status_display }}
+                </span>
+                {% if p.sha_number %}<small style="color:var(--muted);margin-left:4px">{{ p.sha_number }}</small>{% endif %}
+              </td>
+              <td>
+                {% if p.is_active %}
+                  <span class="badge b-active">Active</span>
+                {% else %}
+                  <span class="badge b-n">Inactive</span>
+                {% endif %}
+              </td>
+              <td style="color:var(--muted);font-size:.78rem">{{ p.created_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if total > 200 %}
+        <p class="sub" style="margin-top:12px">Showing first 200 of {{ total }}.</p>
+      {% endif %}
+    {% else %}
+      <p class="sub" style="margin:0">No patients found.</p>
+    {% endif %}
+  </div>
+{% endblock %}
