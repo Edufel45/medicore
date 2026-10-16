@@ -1,0 +1,43 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---- Virtualenv ----
+venv/
+env/
+ENV/
+.venv/
+
+# ---- Django ----
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# ---- Secrets ----
+.env
+.env.local
+.env.*.local
+
+# ---- Celery ----
+celerybeat-schedule
+celerybeat.pid
+
+# ---- Editors ----
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
