@@ -1,0 +1,173 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ user_theme|default:'light' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — MediCore</title>
+  <link rel="stylesheet" href="{% static 'css/medicore.css' %}">
+  <style>
+    /* Login-specific styling — matches the HTML prototype */
+    .login-wrap {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(120deg, #0B2545, #16406f);
+      padding: 20px;
+    }
+    .login-box {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 28px;
+      width: min(420px, 100%);
+      box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .5);
+    }
+    .login-brand {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+    .login-brand .logo {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: var(--teal); color: #fff;
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 1.1rem;
+    }
+    .login-brand .name b {
+      color: var(--navy);
+      font-size: 1.1rem;
+      display: block;
+    }
+    .login-brand .name small {
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .login-box h1 {
+      color: var(--navy);
+      margin: 0 0 4px;
+      font-size: 1.4rem;
+    }
+    .login-box p.sub {
+      color: var(--muted);
+      margin: 0 0 20px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #cdd8e5;
+      border-radius: 10px;
+      font: inherit;
+      background: #fff;
+      color: var(--ink);
+      margin-bottom: 12px;
+    }
+    .form-input:focus {
+      outline: 0;
+      border-color: var(--teal);
+    }
+    .form-input::placeholder {
+      color: #94a3b8;
+    }
+    label {
+      display: block;
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin: 0 0 4px;
+    }
+    .login-btn {
+      width: 100%;
+      background: var(--teal);
+      color: #fff;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-weight: 700;
+      font-size: .95rem;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .login-btn:hover { background: var(--teal2); }
+    .login-hint {
+      margin-top: 18px;
+      padding: 12px;
+      background: var(--soft);
+      border-radius: 10px;
+      font-size: .78rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .login-hint b { color: var(--ink); }
+    .login-error {
+      background: rgba(192,57,43,.1);
+      border: 1px solid rgba(192,57,43,.4);
+      color: #8f2a1e;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: .84rem;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+    .shortcut-hint {
+      text-align: center;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-box">
+    <div class="login-brand">
+      <div class="logo">M</div>
+      <div class="name">
+        <b>MediCore</b>
+        <small>Sample Hospital · OPD</small>
+      </div>
+    </div>
+
+    <h1>Sign in</h1>
+    <p class="sub">Enter your credentials to continue.</p>
+
+    {% if form.non_field_errors %}
+      <div class="login-error">
+        {{ form.non_field_errors.0 }}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'accounts:login' %}">
+      {% csrf_token %}
+
+      <label for="{{ form.username.id_for_label }}">Username</label>
+      {{ form.username }}
+      {% if form.username.errors %}
+        <div class="login-error">{{ form.username.errors.0 }}</div>
+      {% endif %}
+
+      <label for="{{ form.password.id_for_label }}">Password</label>
+      {{ form.password }}
+      {% if form.password.errors %}
+        <div class="login-error">{{ form.password.errors.0 }}</div>
+      {% endif %}
+
+      <input type="hidden" name="next" value="{{ next }}">
+
+      <button type="submit" class="login-btn">Sign in →</button>
+    </form>
+
+    <div class="login-hint">
+      <b>Demo accounts</b> (password: <code>medicore123</code>)<br>
+      <b>reception</b> · <b>nurse</b> · <b>doctor</b> · <b>lab</b> · <b>pharmacy</b> · <b>accounts</b>
+    </div>
+
+    <div class="shortcut-hint">
+      Press <kbd style="background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px">?</kbd> for keyboard shortcuts
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

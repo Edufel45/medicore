@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Access denied — MediCore{% endblock %}
+
+{% block content %}
+  <div class="card" style="max-width:520px;margin:60px auto;text-align:center;">
+    <h1 style="color:var(--navy)">🚫 Access denied</h1>
+    <p class="sub" style="margin:12px 0">
+      Your role does not permit access to this page.
+    </p>
+    <p style="color:var(--muted);font-size:.9rem">
+      If you believe this is a mistake, contact the system administrator.
+    </p>
+    <div style="margin-top:20px">
+      <a href="/" class="btn" style="display:inline-block;padding:10px 20px;text-decoration:none">← Back to home</a>
+    </div>
+  </div>
+{% endblock %}

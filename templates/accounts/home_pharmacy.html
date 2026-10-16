@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Pharmacy — MediCore{% endblock %}
+
+{% block content %}
+  <h1>Good morning</h1>
+  <p class="sub">Pharmacist · dispense, price drugs, and collect payment (SHA or M-Pesa).</p>
+
+  <div class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Prescriptions</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Low stock</small><b style="font-size:1.5rem;color:var(--warn)">0</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Collected today</small><b style="font-size:1.5rem;color:var(--navy)">Ksh 0</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Dispensed today</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
+  </div>
+
+  <div class="card">
+    <h2>Quick actions</h2>
+    <div class="row click" onclick="alert('Pharmacy queue — Phase 6')">
+      <div class="l"><b>🧭 Open pharmacy queue</b><span>Prescriptions waiting to fill</span></div>
+      →
+    </div>
+    <div class="row click" onclick="alert('Drug catalogue — Phase 6')">
+      <div class="l"><b>💊 Drug catalogue</b><span>Names, prices, stock levels</span></div>
+      →
+    </div>
+  </div>
+{% endblock %}

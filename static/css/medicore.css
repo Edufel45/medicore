@@ -115,4 +115,19 @@ h2 { font-size: 1.02rem; margin: 0 0 10px; color: var(--navy); }
   .rail .brand, .rail .sp, .rail .av { display: none; }
   .nv { flex: 1; padding: 4px 0; }
   .view { padding: 14px 14px 90px; }
+}/* Active nav highlight */
+.nv.on {
+  background: rgba(15,166,138,.22);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+/* Logout button (topbar) */
+.themeBtn {
+  text-decoration: none;
+  display: grid;
+  place-items: center;
+}
+.themeBtn:hover {
+  background: var(--line);
 }

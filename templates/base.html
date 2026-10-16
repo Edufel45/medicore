@@ -6,41 +6,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}MediCore{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/medicore.css' %}">
+  {% block extra_head %}{% endblock %}
 </head>
 <body data-role="{{ current_role|default:'' }}">
 
 <div class="app">
-  <!-- Sidebar rail -->
+  <!-- ================= Sidebar rail ================= -->
   <aside class="rail" style="--role-tint: {{ current_role_color|default:'#0FA68A' }};">
     <div class="brand">M</div>
+
     {% for item in nav_items %}
-      <a class="nv" href="/{{ item.key }}/">
+      <a class="nv {% if request.resolver_match and item.key in request.path %}on{% endif %}"
+         href="/{{ item.key }}/"
+         title="{{ item.label }}">
         <i>{{ item.icon }}</i>{{ item.label }}
       </a>
     {% endfor %}
+
     <div class="sp"></div>
-    <div class="av" title="{{ current_role_title }}">
-      {{ current_role_title|slice:":2"|upper }}
+
+    <div class="av" title="{{ current_role_title|default:'Guest' }}">
+      {{ current_role_title|slice:":2"|upper|default:"??" }}
     </div>
   </aside>
 
-  <!-- Main column -->
+  <!-- ================= Main column ================= -->
   <div class="main">
+
     <header class="top" style="border-top-color: {{ current_role_color|default:'#0FA68A' }};">
-      <div class="hn">MediCore<small>Sample Hospital · OPD</small></div>
+      <div class="hn">
+        MediCore<small>Sample Hospital · OPD</small>
+      </div>
+
       <div class="srch">
         🔍 <span>Search patients…</span>
       </div>
+
       <div class="role">
         <span>Signed in as</span>
         <b>{{ current_role_title|default:"Guest" }}</b>
       </div>
+
       {% if user.is_authenticated %}
-        <a href="/admin/logout/" class="themeBtn" title="Logout">⎋</a>
+        <a href="{% url 'accounts:logout' %}" class="themeBtn" title="Sign out">⎋</a>
       {% endif %}
     </header>
 
     <main class="view">
+
+      {# ------- Flash messages ------- #}
       {% if messages %}
         {% for m in messages %}
           <div class="al {% if m.tags == 'error' %}r{% elif m.tags == 'success' %}g{% else %}i{% endif %}">
@@ -49,10 +63,14 @@
         {% endfor %}
       {% endif %}
 
+      {# ------- Page content ------- #}
       {% block content %}{% endblock %}
+
     </main>
   </div>
 </div>
+
+{% block extra_js %}{% endblock %}
 
 </body>
 </html>

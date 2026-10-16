@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Audit log — MediCore{% endblock %}
+
+{% block content %}
+  <h1>Audit log</h1>
+  <p class="sub">Who accessed or changed what, and when. Read-only. Newest first.</p>
+
+  {# ---------- KPI cards ---------- #}
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Entries today</small>
+      <b style="font-size:1.5rem;color:var(--navy)">{{ kpi.today }}</b>
+    </div>
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Logins</small>
+      <b style="font-size:1.5rem;color:var(--navy)">{{ kpi.logins }}</b>
+    </div>
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Patient views</small>
+      <b style="font-size:1.5rem;color:var(--navy)">{{ kpi.views }}</b>
+    </div>
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Payments</small>
+      <b style="font-size:1.5rem;color:var(--navy)">{{ kpi.payments }}</b>
+    </div>
+  </div>
+
+  {# ---------- Filters ---------- #}
+  <div class="card" style="margin-bottom:14px">
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="margin:0;font-size:.72rem;font-weight:700;color:var(--muted)">Search</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Action, patient ID, or user…"
+             style="flex:1;min-width:180px;padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:var(--card);color:var(--ink)">
+
+      <label style="margin:0;font-size:.72rem;font-weight:700;color:var(--muted)">Role</label>
+      <select name="role" style="padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        <option value="">All roles</option>
+        {% for key, label in role_choices %}
+          <option value="{{ key }}" {% if role_filter == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <label style="margin:0;font-size:.72rem;font-weight:700;color:var(--muted)">When</label>
+      <select name="range" style="padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        {% for key, label in range_choices %}
+          <option value="{{ key }}" {% if range == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <button type="submit"
+              style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer">
+        Apply
+      </button>
+
+      {% if q or role_filter or range != "today" %}
+        <a href="{% url 'accounts:audit' %}"
+           style="color:var(--muted);text-decoration:none;font-size:.85rem;padding:9px 12px">
+          Clear
+        </a>
+      {% endif %}
+    </form>
+  </div>
+
+  {# ---------- Table ---------- #}
+  <div class="card">
+    <div style="display:grid;grid-template-columns:170px 150px 1fr 130px;gap:12px;padding:8px 0;border-bottom:2px solid var(--line);font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:800">
+      <div>When</div>
+      <div>Who</div>
+      <div>Action</div>
+      <div>Patient</div>
+    </div>
+
+    {% if entries %}
+      {% for e in entries %}
+        <div style="display:grid;grid-template-columns:170px 150px 1fr 130px;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center;font-size:.85rem">
+          <div style="color:var(--muted);font-size:.78rem;font-family:ui-monospace,monospace">
+            {{ e.created_at|date:"Y-m-d H:i" }}
+          </div>
+          <div>
+            <b style="display:block;font-size:.82rem">{{ e.user.username|default:"system" }}</b>
+            <small style="color:var(--muted);font-size:.7rem">{{ e.role|default:"—" }}</small>
+          </div>
+          <div>
+            <span style="display:inline-block;border-radius:99px;padding:2px 10px;font-size:.7rem;font-weight:800;
+              {% if e.action == 'payment.pharmacy' or e.action == 'payment.reg' %}background:#dcf2e3;color:#0d5a27;
+              {% elif e.action == 'claim.create' %}background:#fff0d1;color:#7a4a00;
+              {% elif e.action == 'stage.change' %}background:#e2eefc;color:#0b4a8f;
+              {% elif e.action == 'patient.view' %}background:#d9f3ee;color:#065f4e;
+              {% else %}background:#e9eef4;color:#475569;{% endif %}">
+              {{ e.get_action_display }}
+            </span>
+            <small style="color:var(--muted);font-size:.75rem;margin-left:6px">{{ e.detail|truncatechars:60 }}</small>
+          </div>
+          <div style="font-family:ui-monospace,monospace;color:var(--teal2);font-weight:700;font-size:.78rem">
+            {{ e.patient_sid|default:"—" }}
+          </div>
+        </div>
+      {% endfor %}
+      {% if total > shown %}
+        <p class="sub" style="margin-top:12px">
+          Showing first {{ shown }} of {{ total }} matches.
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="sub" style="margin-top:14px">No audit entries match.</p>
+    {% endif %}
+  </div>
+
+{% endblock %}

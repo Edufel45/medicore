@@ -1,28 +1,15 @@
 {% extends "base.html" %}
-
-{% block title %}MediCore — Home{% endblock %}
+{% block title %}Home — MediCore{% endblock %}
 
 {% block content %}
-  <h1>Good morning</h1>
-  <p class="sub">MediCore scaffold is running. Phase 1 complete.</p>
+  <h1>Welcome to MediCore</h1>
+  <p class="sub">Signed in as {{ current_role_title|default:"Guest" }}.</p>
 
   <div class="card">
-    <h2>✅ Django is live</h2>
-    <p>Settings load. All 8 apps are registered. Templates render.</p>
-    <ul style="margin: 10px 0 0 20px; color: var(--muted);">
-      <li>accounts · patients · clinical · laboratory</li>
-      <li>pharmacy · billing · sha · mpesa</li>
-    </ul>
-  </div>
-
-  <div class="card" style="margin-top: 14px;">
-    <h2>Next phases</h2>
-    <div class="row"><div class="l"><b>Phase 2</b><span>Data models</span></div></div>
-    <div class="row"><div class="l"><b>Phase 3</b><span>Auth, roles, audit</span></div></div>
-    <div class="row"><div class="l"><b>Phase 4</b><span>Registration + SHA verify</span></div></div>
-    <div class="row"><div class="l"><b>Phase 5</b><span>Clinical flow</span></div></div>
-    <div class="row"><div class="l"><b>Phase 6</b><span>Billing + receipt</span></div></div>
-    <div class="row"><div class="l"><b>Phase 7</b><span>M-Pesa + SHA claims</span></div></div>
-    <div class="row"><div class="l"><b>Phase 8</b><span>Tests + deploy</span></div></div>
+    <h2>No role assigned</h2>
+    <p class="sub" style="margin:0">
+      Your account has no role group. Ask the administrator to assign you one
+      (Receptionist · Nurse · Doctor · Lab Technician · Pharmacist · Accountant).
+    </p>
   </div>
 {% endblock %}
