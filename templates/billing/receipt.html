@@ -1,0 +1,122 @@
+<style>
+  .receipt-body * { box-sizing: border-box; }
+  .receipt-body {
+    margin: 0;
+    padding: 20px;
+    font-family: ui-monospace, "Courier New", monospace;
+    color: #14263d;
+    background: #fff;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .receipt-body .head {
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .receipt-body .head h1 { font-size: 1.15rem; margin: 0 0 4px; font-family: system-ui, sans-serif; }
+  .receipt-body .head small { color: #64748b; font-size: .78rem; }
+  .receipt-body .head .ref { text-align: right; font-size: .85rem; }
+  .receipt-body .head .ref b { display: block; font-size: .9rem; }
+  .receipt-body .head .ref small { display: block; }
+  .receipt-body .rl {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: .85rem;
+  }
+  .receipt-body .rline { border-top: 1px dashed #ccc; margin: 8px 0; }
+  .receipt-body .rt {
+    font-weight: 900;
+    font-size: 1rem;
+    padding-top: 8px;
+    border-top: 2px solid #14263d;
+    margin-top: 6px;
+  }
+  .receipt-body .foot {
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px dashed #ccc;
+    color: #64748b;
+    font-size: .78rem;
+    text-align: center;
+  }
+  .receipt-body .badge {
+    display: inline-block;
+    border-radius: 99px;
+    padding: 2px 10px;
+    font-size: .7rem;
+    font-weight: 800;
+  }
+  .receipt-body .b-active   { background: #dcf2e3; color: #0d5a27; }
+  .receipt-body .b-inactive { background: #fde4e1; color: #8f2a1e; }
+  .receipt-body .b-pending  { background: #fff0d1; color: #7a4a00; }
+  .receipt-body .b-n        { background: #e9eef4; color: #475569; }
+</style>
+
+<div class="receipt-body">
+
+  <div class="head">
+    <div>
+      <h1>MediCore Hospital</h1>
+      <small>Sample Hospital · OPD</small>
+    </div>
+    <div class="ref">
+      <b>{{ receipt.receipt_number }}</b>
+      <small>{{ issued_at|date:"Y-m-d H:i" }}</small>
+    </div>
+  </div>
+
+  <div class="rl"><span>System ID</span><b>{{ patient.sid }}</b></div>
+  <div class="rl"><span>Queue</span><b>{{ visit.queue_number }}</b></div>
+  <div class="rl"><span>Patient</span><b>{{ patient.full_name }}</b></div>
+  {% if patient.national_id %}
+    <div class="rl"><span>National ID</span><b>{{ patient.national_id }}</b></div>
+  {% endif %}
+  <div class="rl"><span>Phone</span><b>{{ patient.phone }}</b></div>
+  <div class="rl">
+    <span>SHA status</span>
+    <b>
+      {% if patient.sha_status == "active" %}<span class="badge b-active">Active</span>
+      {% elif patient.sha_status == "inactive" %}<span class="badge b-inactive">Inactive</span>
+      {% elif patient.sha_status == "pending" %}<span class="badge b-pending">Pending</span>
+      {% else %}<span class="badge b-n">Unknown</span>{% endif %}
+    </b>
+  </div>
+
+  <div class="rline"></div>
+
+  {% for li in line_items %}
+    <div class="rl">
+      <span>{{ li.label }}</span>
+      <b>Ksh {{ li.amount }}</b>
+    </div>
+  {% endfor %}
+
+  <div class="rline"></div>
+
+  <div class="rl"><span>Sub-total</span><b>Ksh {{ bill.total_amount }}</b></div>
+
+  {% if receipt.sha_covered and receipt.sha_covered > 0 %}
+    <div class="rl"><span>SHA covers</span><b>- Ksh {{ receipt.sha_covered }}</b></div>
+  {% endif %}
+
+  <div class="rl rt">
+    <span>Paid by patient</span>
+    <b>Ksh {{ receipt.total_paid }}</b>
+  </div>
+
+  <div class="rline"></div>
+  <div class="rl"><span>Payment method</span><b>M-Pesa / Cash</b></div>
+
+  <div class="foot">
+    Thank you. Get well soon.<br>
+    Keep this receipt for your records.
+  </div>
+
+</div>

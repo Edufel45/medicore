@@ -19,6 +19,12 @@ urlpatterns = [
 
     # Clinical — queue, visits, lab inbox
     path("", include("apps.clinical.urls", namespace="clinical")),
+
+    # Billing — ledger, receipt
+    path("billing/", include("apps.billing.urls", namespace="billing")),
+
+    # SHA — claims
+    path("sha/", include("apps.sha.urls", namespace="sha")),
 ]
 
 if settings.DEBUG:

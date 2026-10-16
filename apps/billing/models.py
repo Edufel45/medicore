@@ -29,6 +29,7 @@ Proposal reference:
   - §2.3 "receipt generation and printing at dispensing points"
 """
 
+import random
 from decimal import Decimal
 
 from django.conf import settings
@@ -361,6 +362,7 @@ class Receipt(models.Model):
         max_length=30,
         unique=True,
         db_index=True,
+        blank=True,          # ← auto-generated in save()
         help_text="Format: RCPT-MCYYYYNNNN-XXXXX.",
     )
     total_paid = models.DecimalField(
@@ -399,13 +401,30 @@ class Receipt(models.Model):
     def __str__(self):
         return f"{self.receipt_number} · Ksh {self.total_paid}"
 
+    # ---------------- Auto-generate receipt number ----------------
+    def save(self, *args, **kwargs):
+        if not self.receipt_number:
+            # Try to use the patient's System ID as the base
+            try:
+                sid = self.bill.visit.patient.sid
+            except Exception:
+                sid = "MC"
+            self.receipt_number = self.generate_number(sid)
+        super().save(*args, **kwargs)
+
     @staticmethod
     def generate_number(patient_sid):
         """
         Generate a unique receipt number.
         Format: RCPT-MC20240001-XXXXX (5 random digits).
+        Loops until it finds one that isn't taken.
         """
-        import random
-        digits = "".join(str(random.randint(0, 9)) for _ in range(5))
-        base = patient_sid.replace("-", "") if patient_sid else "MC"
-        return f"RCPT-{base}-{digits}"
+        base = (patient_sid or "MC").replace("-", "")
+        for _ in range(10):
+            digits = "".join(str(random.randint(0, 9)) for _ in range(5))
+            candidate = f"RCPT-{base}-{digits}"
+            if not Receipt.objects.filter(receipt_number=candidate).exists():
+                return candidate
+        # Extremely unlikely fallback
+        import uuid
+        return f"RCPT-{base}-{uuid.uuid4().hex[:5].upper()}"

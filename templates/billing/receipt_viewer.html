@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Receipt {{ receipt.receipt_number }} — MediCore{% endblock %}
+
+{% block content %}
+  <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    <div>
+      <h1 style="margin:0">Receipt</h1>
+      <p class="sub" style="margin:0">
+        {{ receipt.receipt_number }} · {{ patient.full_name }} ({{ patient.sid }})
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn-o" href="{% url 'clinical:visit_detail' visit.queue_number %}">
+        ← Back to visit
+      </a>
+      <button class="btn-teal" onclick="window.print()">
+        🖨 Print
+      </button>
+      {% if receipt.pdf_url %}
+        <a class="btn-o" href="{{ receipt.pdf_url }}" target="_blank">
+          ⬇ Download PDF
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:center">
+    <div style="background:#fff;box-shadow:0 10px 40px -20px rgba(0,0,0,.3);border-radius:12px;overflow:hidden;max-width:520px;width:100%">
+      {% include "billing/receipt.html" %}
+    </div>
+  </div>
+
+  <style>
+    .no-print .btn-o, .no-print .btn-teal {
+      display: inline-block;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    .no-print .btn-teal {
+      background: var(--teal); color: #fff; border: 0;
+    }
+    .no-print .btn-teal:hover { background: var(--teal2, #0b8a73); }
+    .no-print .btn-o {
+      background: var(--card); color: var(--blue, #1664B0);
+      border: 1.5px solid var(--line);
+    }
+    .no-print .btn-o:hover { background: var(--soft); }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff; }
+      .app { display: block !important; }
+      .rail, .top { display: none !important; }
+      .view { padding: 0 !important; max-width: none !important; }
+      main.view > div > div { box-shadow: none !important; border-radius: 0 !important; }
+    }
+  </style>
+{% endblock %}

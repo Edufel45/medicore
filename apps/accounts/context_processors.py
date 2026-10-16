@@ -47,7 +47,7 @@ ROLE_COLORS = {
 
 # Navigation items per role — mirrors the HTML prototype.
 # Only include links whose URL routes actually exist.
-# Missing routes (like /ledger/, /claims/) are hidden until Phase 6/7.
+# Missing routes are hidden until the relevant phase.
 NAV_BY_ROLE = {
     "reception": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
@@ -77,6 +77,8 @@ NAV_BY_ROLE = {
     ],
     "accounts": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
+        {"key": "claims",   "label": "Claims",   "icon": "📋"},
+        {"key": "billing/ledger", "label": "Ledger", "icon": "📒"},
         {"key": "audit",    "label": "Audit",    "icon": "🕵️"},
         {"key": "patients", "label": "Patients", "icon": "👥"},
     ],

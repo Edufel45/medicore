@@ -15,10 +15,11 @@ The full clinical loop:
   /visits/<queue>/add-lab/       doctor orders lab test
   /visits/<queue>/release-lab/   lab releases results
   /visits/<queue>/price-rx/<id>/ pharmacy sets price
-  /visits/<queue>/collect/       pharmacy collects payment + dispenses + completes
+  /visits/<queue>/collect/       pharmacy collects + dispenses + completes
   /lab/inbox/                    doctor's inbox (patients back from lab)
 """
 
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -30,12 +31,18 @@ from django.utils import timezone
 
 from apps.accounts.decorators import role_required
 from apps.accounts.models import AuditLog
-from apps.billing.models import Payment
+from apps.billing.models import Payment, Receipt
+from apps.billing.services import (
+    create_sha_claim_if_needed,
+    store_receipt_pdf,
+)
 from apps.laboratory.models import LabResult, LabTest
 from apps.pharmacy.models import Drug
 
 from .models import Diagnosis, Prescription, Visit, Vitals
 
+
+logger = logging.getLogger("medicore")
 
 STAGE_ORDER = ["reg", "nurse", "doctor", "lab", "pharmacy"]
 
@@ -296,7 +303,6 @@ def add_prescription(request, queue_number):
         messages.error(request, "Enter a drug name.")
         return redirect("clinical:visit_detail", queue_number=queue_number)
 
-    # Try to resolve immediately against the catalogue
     resolved = (
         Drug.objects
         .filter(is_active=True)
@@ -380,7 +386,6 @@ def add_lab_order(request, queue_number):
         ordered_by=request.user,
     )
 
-    # Add the cost to the bill
     if visit.bill:
         visit.bill.add_line_item(
             label=f"Lab: {test_name}",
@@ -413,7 +418,6 @@ def release_lab_results(request, queue_number):
     raw = (request.POST.get("lab_results") or "").strip()
 
     with transaction.atomic():
-        # Parse lines of the form "Test name: value"
         parsed = {}
         for line in raw.split("\n"):
             line = line.strip()
@@ -510,7 +514,6 @@ def price_prescription(request, queue_number, prescription_id):
     rx.drug = drug
     rx.save(update_fields=["drug"])
 
-    # Add the drug to the bill
     if visit.bill:
         visit.bill.add_line_item(
             label=f"Drug: {drug.name}",
@@ -531,7 +534,7 @@ def price_prescription(request, queue_number, prescription_id):
 
 
 # ------------------------------------------------------------
-# Pharmacy — collect payment + dispense + complete
+# Pharmacy — collect payment + dispense + complete + receipt + SHA claim
 # ------------------------------------------------------------
 @login_required
 @role_required("pharmacy", "admin")
@@ -553,6 +556,7 @@ def collect_payment(request, queue_number):
     method = (request.POST.get("method") or "mpesa").strip()
 
     with transaction.atomic():
+        # ---- 1. Record payment ----
         Payment.objects.create(
             bill=bill,
             method=method,
@@ -567,23 +571,47 @@ def collect_payment(request, queue_number):
         )
         bill.recompute_totals()
 
-        # Dispense all prescriptions
+        # ---- 2. Dispense all prescriptions ----
         for rx in visit.prescriptions.filter(is_dispensed=False):
             rx.is_dispensed = True
             rx.dispensed_at = timezone.now()
             rx.save(update_fields=["is_dispensed", "dispensed_at"])
 
-        # Complete the visit
+        # ---- 3. Complete the visit ----
         visit.stage = "done"
         visit.completed_at = timezone.now()
         visit.save(update_fields=["stage", "completed_at", "updated_at"])
 
+        # ---- 4. Audit ----
         AuditLog.objects.create(
             user=request.user, role="pharmacy", action="payment.pharmacy",
             detail=f"{visit.patient.sid} · Ksh {bill.total_amount} · {method}",
             patient_sid=visit.patient.sid,
             path=request.path, method=request.method,
         )
+
+        # ---- 5. Auto-create SHA claim if applicable ----
+        try:
+            create_sha_claim_if_needed(visit, user=request.user)
+        except Exception as exc:
+            logger.warning("SHA claim creation failed (ignored): %s", exc)
+
+        # ---- 6. Auto-generate receipt + PDF ----
+        receipt, _ = Receipt.objects.get_or_create(
+            bill=bill,
+            defaults={
+                "total_paid": bill.paid_amount,
+                "sha_covered": bill.sha_covered_amount or 0,
+                "issued_by": request.user,
+            },
+        )
+        try:
+            pdf_url = store_receipt_pdf(receipt, bill, visit, force_local=True)
+            if pdf_url:
+                receipt.pdf_url = pdf_url
+                receipt.save(update_fields=["pdf_url"])
+        except Exception as exc:
+            logger.warning("Receipt PDF failed: %s", exc)
 
     messages.success(
         request,

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Ledger — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .badge { display:inline-block; border-radius:99px; padding:2px 10px; font-size:.7rem; font-weight:800; white-space:nowrap; }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-pending  { background: #fff0d1; color: #7a4a00; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .b-n        { background: #e9eef4; color: #475569; }
+    .b-info     { background: #e2eefc; color: #0b4a8f; }
+  </style>
+
+  <h1>Ledger</h1>
+  <p class="sub">All successful payments across the facility. Read-only.</p>
+
+  {# ---- KPIs ---- #}
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Total collected</small>
+      <b style="font-size:1.5rem;color:var(--navy)">Ksh {{ total_amount|floatformat:0 }}</b>
+    </div>
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Transactions</small>
+      <b style="font-size:1.5rem;color:var(--navy)">{{ total_count }}</b>
+    </div>
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Registration fees</small>
+      <b style="font-size:1.5rem;color:var(--navy)">Ksh {{ reg_total|floatformat:0 }}</b>
+    </div>
+    <div class="card">
+      <small style="display:block;color:var(--muted);font-size:.74rem">Pharmacy / other</small>
+      <b style="font-size:1.5rem;color:var(--navy)">Ksh {{ pharmacy_total|floatformat:0 }}</b>
+    </div>
+  </div>
+
+  {# ---- Filters ---- #}
+  <div class="card" style="margin-bottom:14px">
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" name="q" value="{{ q }}" placeholder="Receipt, patient, SID, queue…"
+             style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)">
+      <select name="method" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        {% for key, label in method_choices %}
+          <option value="{{ key }}" {% if method_filter == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="range" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        {% for key, label in range_choices %}
+          <option value="{{ key }}" {% if range == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer">Apply</button>
+      {% if q or method_filter or range != "today" %}
+        <a href="{% url 'billing:ledger' %}" style="color:var(--muted);text-decoration:none;padding:10px 12px">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {# ---- Method breakdown ---- #}
+  {% if method_breakdown %}
+    <div class="card" style="margin-bottom:14px">
+      <h2 style="margin-top:0">By method</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+        {% for method, data in method_breakdown.items %}
+          <div style="background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px">
+            <small style="color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;font-weight:800;display:block">{{ method }}</small>
+            <b style="font-size:1.2rem;display:block;color:var(--navy)">Ksh {{ data.total|floatformat:0 }}</b>
+            <small style="color:var(--muted)">{{ data.count }} transaction{{ data.count|pluralize }}</small>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ---- Table ---- #}
+  <div class="card">
+    {% if payments %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="text-align:left;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">
+            <th style="padding:8px 0">When</th>
+            <th>Patient</th>
+            <th>Queue</th>
+            <th>Method</th>
+            <th>Receipt</th>
+            <th style="text-align:right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+            <tr style="border-top:1px solid var(--line)">
+              <td style="padding:10px 0;color:var(--muted);font-size:.78rem;font-family:ui-monospace,monospace">
+                {{ p.initiated_at|date:"Y-m-d H:i" }}
+              </td>
+              <td>
+                <b>{{ p.bill.visit.patient.full_name }}</b><br>
+                <small style="color:var(--muted);font-family:ui-monospace,monospace;font-size:.72rem">{{ p.bill.visit.patient.sid }}</small>
+              </td>
+              <td style="font-family:ui-monospace,monospace;font-size:.78rem;color:var(--teal2)">
+                {{ p.bill.visit.queue_number }}
+              </td>
+              <td>
+                <span class="badge
+                  {% if p.method == 'mpesa' %}b-active
+                  {% elif p.method == 'cash' %}b-info
+                  {% else %}b-n{% endif %}">
+                  {{ p.get_method_display }}
+                </span>
+              </td>
+              <td style="font-family:ui-monospace,monospace;font-size:.78rem">
+                {{ p.mpesa_receipt|default:"—" }}
+              </td>
+              <td style="text-align:right">
+                <b>Ksh {{ p.amount }}</b>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if total_count > 200 %}
+        <p class="sub" style="margin-top:12px">Showing first 200 of {{ total_count }}.</p>
+      {% endif %}
+    {% else %}
+      <p class="sub" style="margin:0">No payments match the current filters.</p>
+    {% endif %}
+  </div>
+{% endblock %}

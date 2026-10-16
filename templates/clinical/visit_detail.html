@@ -112,12 +112,17 @@
     {# ---------- LEFT ---------- #}
     <div class="card">
       <h2 style="margin-top:0;font-size:.95rem">Quick links</h2>
-      <a class="btn-o btn-sm" href="{% url 'clinical:queue' %}" style="width:100%;text-align:center;margin-bottom:6px">
+      <a class="btn-o btn-sm" href="{% url 'clinical:queue' %}" style="width:100%;text-align:center;margin-bottom:6px;box-sizing:border-box">
         ← Queue board
       </a>
       {% if user_role == "doctor" or user_role == "admin" %}
-        <a class="btn-o btn-sm" href="{% url 'clinical:lab_inbox' %}" style="width:100%;text-align:center">
+        <a class="btn-o btn-sm" href="{% url 'clinical:lab_inbox' %}" style="width:100%;text-align:center;box-sizing:border-box">
           📥 Lab inbox
+        </a>
+      {% endif %}
+      {% if visit.stage == "done" %}
+        <a class="btn-o btn-sm" href="{% url 'billing:receipt' visit.queue_number %}" style="width:100%;text-align:center;margin-top:6px;box-sizing:border-box">
+          🧾 Receipt
         </a>
       {% endif %}
     </div>
@@ -147,7 +152,12 @@
               {{ visit.reason_for_visit|default:"—" }}
             </p>
           </div>
-          <span class="badge b-t">Now: {{ visit.get_stage_display }}</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="badge b-t">Now: {{ visit.get_stage_display }}</span>
+            {% if visit.stage == "done" %}
+              <a class="btn-o btn-sm" href="{% url 'billing:receipt' visit.queue_number %}">🧾 Receipt</a>
+            {% endif %}
+          </div>
         </div>
 
         {# ----- Journey chips ----- #}

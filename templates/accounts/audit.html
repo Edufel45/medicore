@@ -52,6 +52,11 @@
         Apply
       </button>
 
+      <a href="{% url 'accounts:audit_export' %}?q={{ q }}&role={{ role_filter }}&range={{ range }}"
+         style="background:var(--card);color:var(--blue);border:1.5px solid var(--line);border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block">
+        📥 Export CSV
+      </a>
+
       {% if q or role_filter or range != "today" %}
         <a href="{% url 'accounts:audit' %}"
            style="color:var(--muted);text-decoration:none;font-size:.85rem;padding:9px 12px">
@@ -86,6 +91,7 @@
               {% elif e.action == 'claim.create' %}background:#fff0d1;color:#7a4a00;
               {% elif e.action == 'stage.change' %}background:#e2eefc;color:#0b4a8f;
               {% elif e.action == 'patient.view' %}background:#d9f3ee;color:#065f4e;
+              {% elif e.action == 'audit.export' %}background:#e2eefc;color:#0b4a8f;
               {% else %}background:#e9eef4;color:#475569;{% endif %}">
               {{ e.get_action_display }}
             </span>

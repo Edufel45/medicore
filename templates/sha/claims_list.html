@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}SHA claims — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .badge { display:inline-block; border-radius:99px; padding:2px 10px; font-size:.7rem; font-weight:800; white-space:nowrap; }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-inactive { background: #fde4e1; color: #8f2a1e; }
+    .b-pending  { background: #fff0d1; color: #7a4a00; }
+    .b-n        { background: #e9eef4; color: #475569; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .b-info     { background: #e2eefc; color: #0b4a8f; }
+  </style>
+
+  <h1>SHA claims</h1>
+  <p class="sub">Track every claim submitted to SHA. Click any row for the full lifecycle.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px">
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Total</small><b style="font-size:1.5rem;color:var(--navy)">{{ counts.total }}</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Pending</small><b style="font-size:1.5rem;color:#B76E00">{{ counts.pending }}</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Approved</small><b style="font-size:1.5rem;color:#14803C">{{ counts.approved }}</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Rejected</small><b style="font-size:1.5rem;color:#C0392B">{{ counts.rejected }}</b></div>
+    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Paid</small><b style="font-size:1.5rem;color:#0FA68A">{{ counts.paid }}</b></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" name="q" value="{{ q }}" placeholder="Claim ref, patient, SHA number…"
+             style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)">
+      <select name="status" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        {% for key, label in status_choices %}
+          <option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="range" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        {% for key, label in range_choices %}
+          <option value="{{ key }}" {% if range == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer">Apply</button>
+      {% if q or status_filter or range != "30" %}
+        <a href="{% url 'sha:claims_list' %}" style="color:var(--muted);text-decoration:none;padding:10px 12px">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="card">
+    {% if claims %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="text-align:left;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">
+            <th style="padding:8px 0">Reference</th>
+            <th>Patient</th>
+            <th>SHA</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Submitted</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in claims %}
+            <tr style="border-top:1px solid var(--line);cursor:pointer"
+                onclick="window.location='{% url 'sha:claim_detail' c.id %}'">
+              <td style="padding:10px 0;font-family:ui-monospace,monospace;font-size:.78rem;color:var(--teal2);font-weight:700">{{ c.claim_reference }}</td>
+              <td><b>{{ c.patient_name }}</b><br><small style="color:var(--muted)">{{ c.visit.patient.sid }}</small></td>
+              <td style="font-family:ui-monospace,monospace;font-size:.78rem">{{ c.sha_number|default:"—" }}</td>
+              <td><b>Ksh {{ c.claim_amount }}</b></td>
+              <td>
+                <span class="badge
+                  {% if c.status == 'approved' or c.status == 'paid' %}b-active
+                  {% elif c.status == 'rejected' %}b-inactive
+                  {% elif c.status == 'pending' or c.status == 'under_review' %}b-pending
+                  {% else %}b-n{% endif %}">
+                  {{ c.get_status_display }}
+                </span>
+              </td>
+              <td style="color:var(--muted);font-size:.78rem">{{ c.created_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if total > 200 %}<p class="sub" style="margin-top:12px">Showing first 200 of {{ total }}.</p>{% endif %}
+    {% else %}
+      <p class="sub" style="margin:0">No claims match.</p>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -3,15 +3,17 @@ MediCore — Audit Views
 ============================================================
 Read-only audit log, restricted to the Accountant role.
 
-Filters supported via querystring:
-  ?q=...          free-text search across detail / path / patient_sid / user
-  ?role=...       one of the role keys
-  ?range=today    24h | 7 | 30 | all
+Routes:
+  /audit/            list with filters (q, role, range)
+  /audit/export/     CSV download (same filters as list)
 """
 
+import csv
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -19,15 +21,15 @@ from .decorators import role_required
 from .models import AuditLog
 
 
-@login_required
-@role_required("accounts", "admin")
-def audit_list(request):
+# ------------------------------------------------------------
+# Filter helper — used by both list and export
+# ------------------------------------------------------------
+def _filter_audit_qs(request):
+    """Apply the URL filters to an AuditLog queryset."""
     qs = AuditLog.objects.select_related("user").all()
 
-    # ----- Search -----
     q = (request.GET.get("q") or "").strip()
     if q:
-        from django.db.models import Q
         qs = qs.filter(
             Q(detail__icontains=q)
             | Q(path__icontains=q)
@@ -35,12 +37,10 @@ def audit_list(request):
             | Q(user__username__icontains=q)
         )
 
-    # ----- Role filter -----
     role_filter = (request.GET.get("role") or "").strip()
     if role_filter:
         qs = qs.filter(role=role_filter)
 
-    # ----- Date range -----
     rng = (request.GET.get("range") or "today").strip()
     now = timezone.now()
     if rng == "today":
@@ -54,24 +54,32 @@ def audit_list(request):
         qs = qs.filter(created_at__gte=now - timedelta(days=30))
     # "all" → no filter
 
-    total = qs.count()
-    entries = list(qs[:200])  # cap display at 200
+    return qs
 
-    # Group counts for the KPI cards (today)
+
+# ------------------------------------------------------------
+# Audit list
+# ------------------------------------------------------------
+@login_required
+@role_required("accounts", "admin")
+def audit_list(request):
+    qs = _filter_audit_qs(request).order_by("-created_at")
+
+    total = qs.count()
+    entries = list(qs[:200])
+
+    # KPI counts for today
+    now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_qs = AuditLog.objects.filter(created_at__gte=today_start)
-    today_count = today_qs.count()
-    login_count = today_qs.filter(action="login").count()
-    view_count = today_qs.filter(action__startswith="patient.view").count()
-    payment_count = today_qs.filter(action__startswith="payment.").count()
 
     context = {
         "entries": entries,
         "total": total,
         "shown": len(entries),
-        "q": q,
-        "role_filter": role_filter,
-        "range": rng,
+        "q": (request.GET.get("q") or ""),
+        "role_filter": (request.GET.get("role") or ""),
+        "range": (request.GET.get("range") or "today"),
         "role_choices": [
             ("reception", "Receptionist"),
             ("nurse", "Nurse"),
@@ -88,10 +96,68 @@ def audit_list(request):
             ("all", "All time"),
         ],
         "kpi": {
-            "today": today_count,
-            "logins": login_count,
-            "views": view_count,
-            "payments": payment_count,
+            "today": today_qs.count(),
+            "logins": today_qs.filter(action="login").count(),
+            "views": today_qs.filter(action__startswith="patient.view").count(),
+            "payments": today_qs.filter(action__startswith="payment.").count(),
         },
     }
     return render(request, "accounts/audit.html", context)
+
+
+# ------------------------------------------------------------
+# CSV export
+# ------------------------------------------------------------
+@login_required
+@role_required("accounts", "admin")
+def audit_export_csv(request):
+    """
+    /audit/export/ — download the filtered audit log as CSV.
+    Uses the same filters as the list view.
+    """
+    qs = _filter_audit_qs(request).order_by("-created_at")
+
+    # Log the export itself
+    AuditLog.objects.create(
+        user=request.user,
+        role="accounts",
+        action="audit.export",
+        detail=f"Exported {qs.count()} audit entries to CSV",
+        path=request.path,
+        method=request.method,
+    )
+
+    # Build the response
+    timestamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"medicore_audit_{timestamp}.csv"
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Timestamp",
+        "User",
+        "Role",
+        "Action",
+        "Detail",
+        "Patient SID",
+        "IP Address",
+        "Method",
+        "Path",
+    ])
+
+    for entry in qs.iterator():
+        writer.writerow([
+            entry.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            entry.user.username if entry.user else "system",
+            entry.role or "—",
+            entry.get_action_display(),
+            entry.detail or "",
+            entry.patient_sid or "",
+            entry.ip_address or "",
+            entry.method or "",
+            entry.path or "",
+        ])
+
+    return response

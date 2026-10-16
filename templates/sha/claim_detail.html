@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}{{ claim.claim_reference }} — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .badge { display:inline-block; border-radius:99px; padding:2px 10px; font-size:.7rem; font-weight:800; white-space:nowrap; }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-inactive { background: #fde4e1; color: #8f2a1e; }
+    .b-pending  { background: #fff0d1; color: #7a4a00; }
+    .b-n        { background: #e9eef4; color: #475569; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .step { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); align-items:flex-start; }
+    .step:last-child { border:0; }
+    .step .dot {
+      width:26px; height:26px; border-radius:50%; background:var(--line);
+      display:grid; place-items:center; font-weight:800; font-size:.75rem;
+      color:var(--muted); flex-shrink:0;
+    }
+    .step.done .dot { background:var(--teal); color:#fff; }
+    .step.current .dot { background:#fff; border:3px solid var(--teal); color:var(--teal2); }
+    .step.failed .dot { background:#C0392B; color:#fff; }
+    .step b { display:block; }
+    .step small { color:var(--muted); font-size:.78rem; }
+    .btn-teal { background:var(--teal); color:#fff; border:0; border-radius:10px; padding:9px 16px; font-weight:700; cursor:pointer; }
+    .btn-teal:hover { background:var(--teal2); }
+    .btn-warn { background:#B76E00; color:#fff; border:0; border-radius:10px; padding:9px 16px; font-weight:700; cursor:pointer; }
+    .btn-bad { background:#C0392B; color:#fff; border:0; border-radius:10px; padding:9px 16px; font-weight:700; cursor:pointer; }
+    .btn-o { background:var(--card); color:var(--blue); border:1.5px solid var(--line); border-radius:10px; padding:9px 16px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; }
+    .row { display:flex; justify-content:space-between; padding:6px 0; font-size:.85rem; }
+  </style>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    <div>
+      <h1 style="margin:0">
+        <span style="font-family:ui-monospace,monospace;font-size:1.1rem">{{ claim.claim_reference }}</span>
+        <span class="badge
+          {% if claim.status == 'approved' or claim.status == 'paid' %}b-active
+          {% elif claim.status == 'rejected' %}b-inactive
+          {% elif claim.status == 'pending' or claim.status == 'under_review' %}b-pending
+          {% else %}b-n{% endif %}">
+          {{ claim.get_status_display }}
+        </span>
+      </h1>
+      <p class="sub" style="margin:4px 0 0">
+        {{ claim.patient_name }} · {{ claim.visit.patient.sid }} ·
+        Ksh {{ claim.claim_amount }}
+      </p>
+    </div>
+    <a class="btn-o" href="{% url 'sha:claims_list' %}">← All claims</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+
+    {# ---- LEFT: details + line items ---- #}
+    <div>
+      <div class="card">
+        <h2 style="margin-top:0">Claim details</h2>
+        <div class="row"><span>Claim reference</span><b style="font-family:ui-monospace,monospace">{{ claim.claim_reference }}</b></div>
+        <div class="row"><span>Patient name</span><b>{{ claim.patient_name }}</b></div>
+        <div class="row"><span>System ID</span><b style="font-family:ui-monospace,monospace">{{ claim.visit.patient.sid }}</b></div>
+        <div class="row"><span>National ID</span><b style="font-family:ui-monospace,monospace">{{ claim.patient_national_id|default:"—" }}</b></div>
+        <div class="row"><span>SHA number</span><b style="font-family:ui-monospace,monospace">{{ claim.sha_number|default:"—" }}</b></div>
+        <div class="row"><span>Fund type</span><b>{{ claim.get_fund_type_display }}</b></div>
+        <div class="row"><span>Claim amount</span><b>Ksh {{ claim.claim_amount }}</b></div>
+        {% if claim.approved_amount %}
+          <div class="row"><span>Approved amount</span><b>Ksh {{ claim.approved_amount }}</b></div>
+        {% endif %}
+        {% if claim.paid_amount %}
+          <div class="row"><span>Paid amount</span><b>Ksh {{ claim.paid_amount }}</b></div>
+        {% endif %}
+        <div class="row"><span>Created</span><b>{{ claim.created_at|date:"Y-m-d H:i" }}</b></div>
+        {% if claim.submitted_at %}
+          <div class="row"><span>Submitted</span><b>{{ claim.submitted_at|date:"Y-m-d H:i" }}</b></div>
+        {% endif %}
+        {% if claim.decided_at %}
+          <div class="row"><span>Decided</span><b>{{ claim.decided_at|date:"Y-m-d H:i" }}</b></div>
+        {% endif %}
+        {% if claim.paid_at %}
+          <div class="row"><span>Paid</span><b>{{ claim.paid_at|date:"Y-m-d H:i" }}</b></div>
+        {% endif %}
+      </div>
+
+      {% if line_items %}
+        <div class="card" style="margin-top:14px">
+          <h2 style="margin-top:0">Line items</h2>
+          {% for li in line_items %}
+            <div class="row">
+              <span>{{ li.label }}</span>
+              <b>Ksh {{ li.amount }}</b>
+            </div>
+          {% endfor %}
+          <div class="row" style="border-top:2px solid var(--line);margin-top:6px;padding-top:10px">
+            <b>Total</b>
+            <b>Ksh {{ bill.total_amount }}</b>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if claim.rejection_reason %}
+        <div class="al r" style="margin-top:14px">
+          <b>Rejection reason:</b> {{ claim.rejection_reason }}
+        </div>
+      {% endif %}
+    </div>
+
+    {# ---- RIGHT: timeline + actions ---- #}
+    <div>
+      <div class="card">
+        <h2 style="margin-top:0">Status timeline</h2>
+        {% for s in steps %}
+          <div class="step
+            {% if s.failed %}failed
+            {% elif s.current %}current
+            {% elif s.done %}done{% endif %}">
+            <div class="dot">
+              {% if s.done and not s.current %}✓
+              {% elif s.failed %}✕
+              {% else %}·{% endif %}
+            </div>
+            <div>
+              <b>{{ s.label }}</b>
+              <small>{{ s.small }}</small>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2 style="margin-top:0">Simulate response (demo)</h2>
+        <p class="sub" style="margin:0 0 12px;font-size:.78rem">
+          In production this comes from SHA via the backend. For the demo, set the status manually.
+        </p>
+
+        <form method="post" action="{% url 'sha:claim_set_status' claim.id %}" style="display:flex;flex-direction:column;gap:10px">
+          {% csrf_token %}
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="submit" name="status" value="pending" class="btn-warn">Mark Pending</button>
+            <button type="submit" name="status" value="under_review" class="btn-warn">Mark Under review</button>
+            <button type="submit" name="status" value="approved" class="btn-teal">Mark Approved</button>
+            <button type="submit" name="status" value="rejected" class="btn-bad">Mark Rejected</button>
+            <button type="submit" name="status" value="paid" class="btn-teal">Mark Paid</button>
+          </div>
+
+          <label for="reason" style="font-size:.72rem;font-weight:700;color:var(--muted);margin-top:6px">Rejection reason (optional)</label>
+          <input type="text" id="reason" name="reason" placeholder="e.g. Missing diagnosis code"
+                 style="padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:var(--card);color:var(--ink)">
+        </form>
+      </div>
+    </div>
+
+  </div>
+{% endblock %}
