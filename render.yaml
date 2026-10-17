@@ -1,0 +1,115 @@
+# =====================================================
+# MediCore — Render Blueprint
+# =====================================================
+# This file lets you deploy via "New → Blueprint" on Render.
+# It provisions:
+#   - 1 web service (Django + gunicorn)
+#   - 1 background worker (Celery)
+#   - 1 Redis instance (broker + cache)
+#   - 1 Postgres database (or use Supabase — see env vars)
+# =====================================================
+
+services:
+  # ---------------- Django Web ----------------
+  - type: web
+    name: medicore-web
+    env: python
+    region: frankfurt
+    plan: free
+    branch: master
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn medicore.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120"
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DJANGO_TIME_ZONE
+        value: "Africa/Nairobi"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: medicore-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: medicore-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: medicore-redis
+          property: connectionString
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "False"
+      - key: SHA_PROVIDER
+        value: "mock"
+      - key: DARAJA_ENV
+        value: "sandbox"
+      - key: DARAJA_SHORTCODE
+        value: "174379"
+      # Set the rest manually in the Render dashboard:
+      # DARAJA_CONSUMER_KEY, DARAJA_CONSUMER_SECRET, DARAJA_PASSKEY,
+      # DARAJA_CALLBACK_URL (your live URL + /mpesa/callback/stk/),
+      # SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_STORAGE_BUCKET
+
+  # ---------------- Celery Worker ----------------
+  - type: worker
+    name: medicore-worker
+    env: python
+    region: frankfurt
+    plan: free
+    branch: master
+    buildCommand: "./build.sh"
+    startCommand: "celery -A medicore worker --loglevel=info --concurrency=2"
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: medicore-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: medicore-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: medicore-redis
+          property: connectionString
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "False"
+
+  # ---------------- Redis (broker + cache) ----------------
+  - type: redis
+    name: medicore-redis
+    region: frankfurt
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []   # only internal services can access
+
+# ---------------- Postgres ----------------
+# Comment this out if you prefer to use Supabase for the DB.
+databases:
+  - name: medicore-db
+    region: frankfurt
+    plan: free
+    databaseName: medicore
+    user: medicore
