@@ -2,7 +2,6 @@
 MediCore — Clinical Views
 ============================================================
 The full clinical loop:
-
   /queue/                        hospital-wide kanban
   /visits/<queue>/               per-visit workbench
   /visits/<queue>/vitals/        nurse saves vitals
@@ -31,7 +30,7 @@ from django.utils import timezone
 
 from apps.accounts.decorators import role_required
 from apps.accounts.models import AuditLog
-from apps.billing.models import Payment, Receipt
+from apps.billing.models import Bill, Payment, Receipt
 from apps.billing.services import (
     create_sha_claim_if_needed,
     store_receipt_pdf,
@@ -66,6 +65,14 @@ def _int(val):
     try:
         return int(val)
     except (ValueError, TypeError):
+        return None
+
+
+def _get_bill_or_none(visit):
+    """Safely return a visit's bill, or None if it has none."""
+    try:
+        return visit.bill
+    except Visit.bill.RelatedObjectDoesNotExist:
         return None
 
 
@@ -130,7 +137,7 @@ def visit_detail(request, queue_number):
     diagnosis = getattr(visit, "diagnosis", None)
     prescriptions = visit.prescriptions.all()
     lab_tests = visit.lab_tests.all()
-    bill = getattr(visit, "bill", None)
+    bill = _get_bill_or_none(visit)
     drugs = Drug.objects.filter(is_active=True).order_by("name")[:200]
 
     return render(request, "clinical/visit_detail.html", {
@@ -386,8 +393,9 @@ def add_lab_order(request, queue_number):
         ordered_by=request.user,
     )
 
-    if visit.bill:
-        visit.bill.add_line_item(
+    bill = _get_bill_or_none(visit)
+    if bill:
+        bill.add_line_item(
             label=f"Lab: {test_name}",
             amount=price,
             kind="lab",
@@ -514,8 +522,9 @@ def price_prescription(request, queue_number, prescription_id):
     rx.drug = drug
     rx.save(update_fields=["drug"])
 
-    if visit.bill:
-        visit.bill.add_line_item(
+    bill = _get_bill_or_none(visit)
+    if bill:
+        bill.add_line_item(
             label=f"Drug: {drug.name}",
             amount=price,
             kind="drug",
@@ -539,21 +548,11 @@ def price_prescription(request, queue_number, prescription_id):
 @login_required
 @role_required("pharmacy", "admin")
 def collect_payment(request, queue_number):
-    """
-    Pharmacy collects payment + dispenses + completes + receipt.
-
-    Behaviour:
-      - Cash  → settle immediately, complete the visit
-      - M-Pesa:
-          - Mock mode (no Daraja credentials) → settle immediately
-          - Real mode → initiate STK Push, redirect to visit;
-                        callback completes the visit
-    """
     visit = get_object_or_404(Visit, queue_number=queue_number)
     if request.method != "POST":
         return redirect("clinical:visit_detail", queue_number=queue_number)
 
-    bill = getattr(visit, "bill", None)
+    bill = _get_bill_or_none(visit)
     if not bill:
         messages.error(request, "No bill found.")
         return redirect("clinical:visit_detail", queue_number=queue_number)
@@ -571,10 +570,7 @@ def collect_payment(request, queue_number):
         client = get_daraja()
 
         if not client.is_mock:
-            # Real STK Push — the callback will complete the visit
             return redirect("mpesa:initiate", queue_number=visit.queue_number)
-
-        # Mock mode falls through to the immediate settle below
 
     # ---- Immediate settle (cash, or mpesa in mock mode) ----
     with transaction.atomic():
@@ -592,18 +588,15 @@ def collect_payment(request, queue_number):
         )
         bill.recompute_totals()
 
-        # Dispense all prescriptions
         for rx in visit.prescriptions.filter(is_dispensed=False):
             rx.is_dispensed = True
             rx.dispensed_at = timezone.now()
             rx.save(update_fields=["is_dispensed", "dispensed_at"])
 
-        # Complete the visit
         visit.stage = "done"
         visit.completed_at = timezone.now()
         visit.save(update_fields=["stage", "completed_at", "updated_at"])
 
-        # Audit
         AuditLog.objects.create(
             user=request.user, role="pharmacy", action="payment.pharmacy",
             detail=f"{visit.patient.sid} · Ksh {bill.total_amount} · {method}",
@@ -611,13 +604,11 @@ def collect_payment(request, queue_number):
             path=request.path, method=request.method,
         )
 
-        # SHA claim if applicable
         try:
             create_sha_claim_if_needed(visit, user=request.user)
         except Exception as exc:
             logger.warning("SHA claim creation failed (ignored): %s", exc)
 
-        # Receipt + PDF
         receipt, _ = Receipt.objects.get_or_create(
             bill=bill,
             defaults={
