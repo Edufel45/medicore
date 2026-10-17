@@ -1,49 +1,50 @@
 # =====================================================
 # MediCore Hospital Management System
-# Python 3.14 / Django 5.2 / PostgreSQL (Supabase)
+# Python 3.14 / Django 5.2.8 / PostgreSQL (Supabase)
+# Frozen on: 2026-10-17
 # =====================================================
 
-# Core framework
+# ---------- Core framework ----------
 Django==5.2.8
 djangorestframework==3.15.2
 django-environ==0.11.2
 
-# Database
+# ---------- Database ----------
 psycopg[binary]==3.3.0
 dj-database-url==2.3.0
 
-# Async / task queue
+# ---------- Async / task queue ----------
 celery==5.6.0
 redis==5.2.1
 
-# HTTP client (Daraja, SHA, Supabase)
+# ---------- HTTP client ----------
 requests==2.32.3
 httpx==0.27.2
 
-# Cryptography (Daraja SecurityCredential — RSA)
+# ---------- Cryptography (Daraja SecurityCredential) ----------
 cryptography==50.0.1
 
-# Storage (Supabase)
+# ---------- Supabase ----------
 supabase==2.10.0
 
-# File generation (receipts, lab reports)
+# ---------- File generation (receipts, lab reports) ----------
 weasyprint==66.0
 Pillow==11.3.0
 
-# Forms / template helpers
+# ---------- Forms / template helpers ----------
 django-widget-tweaks==1.5.0
 django-crispy-forms==2.3
 crispy-tailwind==1.0.3
 
-# Environment
+# ---------- Env ----------
 python-decouple==3.8
 
-# Production server
+# ---------- Production server ----------
 gunicorn==23.0.0
 whitenoise==6.8.2
 
-# Testing
+# ---------- Testing ----------
 pytest==8.3.3
 pytest-django==4.9.0
-responses==0.25.3
 pytest-cov==6.0.0
+responses==0.25.3
