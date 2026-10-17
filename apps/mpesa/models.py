@@ -138,6 +138,25 @@ class MPesaTransaction(models.Model):
         max_length=255,
         blank=True,
     )
+    # ---- Reversal (refund) ----
+    reversed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set when the transaction has been reversed via Daraja.",
+    )
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mpesa_reversals",
+        help_text="Accountant who initiated the reversal.",
+    )
+    reversal_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Reason for the refund.",
+    )
 
     # ---- Timestamps ----
     initiated_at = models.DateTimeField(auto_now_add=True, db_index=True)

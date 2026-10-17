@@ -105,6 +105,18 @@
     }
     .drug-tag:hover { border-color: var(--teal); }
     .drug-tag.on { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .mpesa-panel {
+      background: rgba(11,138,115,.06);
+      border: 1px solid rgba(11,138,115,.3);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-top: 12px;
+    }
+    .mpesa-panel .title {
+      font-weight: 800; color: var(--teal2, #0b8a73);
+      font-size: .85rem; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
   </style>
 
   <div class="wb-split">
@@ -492,6 +504,65 @@
               {% elif visit.stage == "pharmacy" and bill.balance_due <= 0 %}
                 <div class="al g" style="margin-top:12px">Bill already settled. Patient can be discharged.</div>
               {% endif %}
+
+              {# ----- M-Pesa transaction panel (dev helper + real status) ----- #}
+              {% with txn=visit.mpesa_transactions.last %}
+                {% if txn %}
+                  <div class="mpesa-panel">
+                    <div class="title">
+                      <span>📱 M-Pesa transaction</span>
+                      <span class="badge
+                        {% if txn.status == 'success' %}b-active
+                        {% elif txn.status == 'failed' %}b-inactive
+                        {% elif txn.status == 'pending' %}b-pending
+                        {% else %}b-n{% endif %}">
+                        {{ txn.get_status_display }}
+                      </span>
+                    </div>
+
+                    <div class="row">
+                      <span>Amount</span>
+                      <b>Ksh {{ txn.amount }}</b>
+                    </div>
+                    <div class="row">
+                      <span>Phone</span>
+                      <b style="font-family:ui-monospace,monospace">{{ txn.phone }}</b>
+                    </div>
+                    {% if txn.mpesa_receipt %}
+                      <div class="row">
+                        <span>Receipt</span>
+                        <b style="font-family:ui-monospace,monospace">{{ txn.mpesa_receipt }}</b>
+                      </div>
+                    {% endif %}
+                    {% if txn.checkout_request_id %}
+                      <div class="row">
+                        <span>Checkout ID</span>
+                        <b style="font-family:ui-monospace,monospace;font-size:.72rem">{{ txn.checkout_request_id|truncatechars:28 }}</b>
+                      </div>
+                    {% endif %}
+                    {% if txn.result_description %}
+                      <div class="row">
+                        <span>Result</span>
+                        <b style="font-size:.75rem">{{ txn.result_description|truncatechars:60 }}</b>
+                      </div>
+                    {% endif %}
+
+                    {% if txn.status in "initiated,pending" %}
+                      <form method="post"
+                            action="{% url 'mpesa:simulate_callback' txn.id %}"
+                            style="margin-top:12px">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-o btn-sm">
+                          🧪 Simulate callback (dev)
+                        </button>
+                      </form>
+                      <p class="sub" style="margin:8px 0 0;font-size:.72rem">
+                        In production, Safaricom posts the callback automatically. This button is only for the demo.
+                      </p>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              {% endwith %}
             {% endif %}
           </div>
         {% endif %}

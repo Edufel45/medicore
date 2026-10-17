@@ -71,6 +71,7 @@ PAYMENT_STATUS_CHOICES = [
     ("failed",    "Failed"),
     ("timeout",   "Timeout"),
     ("cancelled", "Cancelled"),
+     ("refunded",  "Refunded"),
 ]
 
 

@@ -539,6 +539,16 @@ def price_prescription(request, queue_number, prescription_id):
 @login_required
 @role_required("pharmacy", "admin")
 def collect_payment(request, queue_number):
+    """
+    Pharmacy collects payment + dispenses + completes + receipt.
+
+    Behaviour:
+      - Cash  → settle immediately, complete the visit
+      - M-Pesa:
+          - Mock mode (no Daraja credentials) → settle immediately
+          - Real mode → initiate STK Push, redirect to visit;
+                        callback completes the visit
+    """
     visit = get_object_or_404(Visit, queue_number=queue_number)
     if request.method != "POST":
         return redirect("clinical:visit_detail", queue_number=queue_number)
@@ -555,8 +565,19 @@ def collect_payment(request, queue_number):
 
     method = (request.POST.get("method") or "mpesa").strip()
 
+    # ---- M-Pesa + real Daraja → redirect to STK initiation ----
+    if method == "mpesa":
+        from apps.mpesa.daraja import get_daraja
+        client = get_daraja()
+
+        if not client.is_mock:
+            # Real STK Push — the callback will complete the visit
+            return redirect("mpesa:initiate", queue_number=visit.queue_number)
+
+        # Mock mode falls through to the immediate settle below
+
+    # ---- Immediate settle (cash, or mpesa in mock mode) ----
     with transaction.atomic():
-        # ---- 1. Record payment ----
         Payment.objects.create(
             bill=bill,
             method=method,
@@ -571,18 +592,18 @@ def collect_payment(request, queue_number):
         )
         bill.recompute_totals()
 
-        # ---- 2. Dispense all prescriptions ----
+        # Dispense all prescriptions
         for rx in visit.prescriptions.filter(is_dispensed=False):
             rx.is_dispensed = True
             rx.dispensed_at = timezone.now()
             rx.save(update_fields=["is_dispensed", "dispensed_at"])
 
-        # ---- 3. Complete the visit ----
+        # Complete the visit
         visit.stage = "done"
         visit.completed_at = timezone.now()
         visit.save(update_fields=["stage", "completed_at", "updated_at"])
 
-        # ---- 4. Audit ----
+        # Audit
         AuditLog.objects.create(
             user=request.user, role="pharmacy", action="payment.pharmacy",
             detail=f"{visit.patient.sid} · Ksh {bill.total_amount} · {method}",
@@ -590,13 +611,13 @@ def collect_payment(request, queue_number):
             path=request.path, method=request.method,
         )
 
-        # ---- 5. Auto-create SHA claim if applicable ----
+        # SHA claim if applicable
         try:
             create_sha_claim_if_needed(visit, user=request.user)
         except Exception as exc:
             logger.warning("SHA claim creation failed (ignored): %s", exc)
 
-        # ---- 6. Auto-generate receipt + PDF ----
+        # Receipt + PDF
         receipt, _ = Receipt.objects.get_or_create(
             bill=bill,
             defaults={

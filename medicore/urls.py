@@ -25,6 +25,9 @@ urlpatterns = [
 
     # SHA — claims
     path("sha/", include("apps.sha.urls", namespace="sha")),
+
+    # M-Pesa — STK Push, callbacks, transaction log
+    path("mpesa/", include("apps.mpesa.urls", namespace="mpesa")),
 ]
 
 if settings.DEBUG:

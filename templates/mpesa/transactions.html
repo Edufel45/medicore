@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}M-Pesa transactions — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .badge { display:inline-block; border-radius:99px; padding:2px 10px; font-size:.7rem; font-weight:800; white-space:nowrap; }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-inactive { background: #fde4e1; color: #8f2a1e; }
+    .b-pending  { background: #fff0d1; color: #7a4a00; }
+    .b-n        { background: #e9eef4; color: #475569; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .b-info     { background: #e2eefc; color: #0b4a8f; }
+  </style>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+    <div>
+      <h1 style="margin:0">M-Pesa transactions</h1>
+      <p class="sub" style="margin:4px 0 0">Every STK Push and C2B payment attempt.</p>
+    </div>
+    <form method="post" action="{% url 'mpesa:c2b_register' %}">
+      {% csrf_token %}
+      <button type="submit"
+              style="background:var(--card);color:var(--blue);border:1.5px solid var(--line);border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer">
+        🔗 Register C2B URLs
+      </button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <label style="margin:0;font-size:.72rem;font-weight:700;color:var(--muted)">Status</label>
+      <select name="status" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink);font-weight:600">
+        {% for key, label in status_choices %}
+          <option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer">Apply</button>
+      {% if status_filter %}
+        <a href="{% url 'mpesa:transactions' %}" style="color:var(--muted);text-decoration:none;padding:10px 12px">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="card">
+    {% if transactions %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="text-align:left;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">
+            <th style="padding:8px 0">When</th>
+            <th>Type</th>
+            <th>Patient</th>
+            <th>Phone</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Receipt</th>
+            <th style="text-align:right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+            <tr style="border-top:1px solid var(--line)">
+              <td style="padding:10px 0;color:var(--muted);font-size:.78rem;font-family:ui-monospace,monospace">
+                {{ t.initiated_at|date:"Y-m-d H:i" }}
+              </td>
+
+              {# ---- Type column ---- #}
+              <td>
+                {% if t.transaction_type == "stk_push" %}
+                  <span class="badge b-t">STK Push</span>
+                {% elif t.transaction_type == "c2b" %}
+                  <span class="badge b-info">C2B</span>
+                {% elif t.transaction_type == "b2c" %}
+                  <span class="badge b-n">B2C</span>
+                {% else %}
+                  <span class="badge b-n">{{ t.get_transaction_type_display }}</span>
+                {% endif %}
+              </td>
+
+              <td>
+                {% if t.visit %}
+                  <b>{{ t.visit.patient.full_name }}</b><br>
+                  <small style="color:var(--muted);font-family:ui-monospace,monospace;font-size:.72rem">{{ t.visit.patient.sid }}</small>
+                {% else %}
+                  <span style="color:var(--muted)">—</span>
+                {% endif %}
+              </td>
+
+              <td style="font-family:ui-monospace,monospace;font-size:.78rem">{{ t.phone }}</td>
+
+              <td><b>Ksh {{ t.amount }}</b></td>
+
+              <td>
+                <span class="badge
+                  {% if t.status == 'success' %}b-active
+                  {% elif t.status == 'failed' %}b-inactive
+                  {% elif t.status == 'pending' %}b-pending
+                  {% else %}b-n{% endif %}">
+                  {{ t.get_status_display }}
+                </span>
+              </td>
+
+              <td style="font-family:ui-monospace,monospace;font-size:.78rem">
+                {{ t.mpesa_receipt|default:"—" }}
+                {% if t.reversed_at %}
+                  <br><span class="badge b-inactive" style="margin-top:4px;font-size:.65rem">REVERSED</span>
+                {% endif %}
+              </td>
+
+              <td style="text-align:right">
+                {% if t.status == "success" and not t.reversed_at %}
+                  <form method="post" action="{% url 'mpesa:reversal' t.id %}" style="display:inline-block">
+                    {% csrf_token %}
+                    <input type="text" name="reason" placeholder="Reason"
+                           style="width:120px;padding:5px 8px;font-size:.75rem;border:1.5px solid var(--line);border-radius:6px;font-family:inherit">
+                    <button type="submit" class="badge b-inactive"
+                            style="border:0;cursor:pointer;padding:5px 10px;font-size:.72rem;font-weight:800">
+                      Refund
+                    </button>
+                  </form>
+                {% else %}
+                  <span style="color:var(--muted);font-size:.75rem">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if total > 200 %}
+        <p class="sub" style="margin-top:12px">Showing first 200 of {{ total }}.</p>
+      {% endif %}
+    {% else %}
+      <p class="sub" style="margin:0">No transactions yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

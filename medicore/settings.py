@@ -87,7 +87,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # Custom — audit logging. We'll add the file next step.
+    # Custom — audit logging
     "apps.accounts.middleware.AuditMiddleware",
 ]
 
@@ -220,7 +220,7 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@medicore.local"
 
 # ------------------------------------------------------------
 # ──────────────────────────────────────────────────────────────
-# MediCore — custom settings (Sections below)
+# MediCore — custom settings
 # ──────────────────────────────────────────────────────────────
 # ------------------------------------------------------------
 
@@ -256,19 +256,40 @@ SHA_API_BASE = env("SHA_API_BASE", default="")
 SHA_API_KEY = env("SHA_API_KEY", default="")
 SHA_FACILITY_CODE = env("SHA_FACILITY_CODE", default="")
 
-# ---- Celery ----
+# ------------------------------------------------------------
+# Celery — async tasks, callbacks, reconciliation
+# ------------------------------------------------------------
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/1")
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60      # 30 min hard limit
-CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60 # 25 min soft limit
+CELERY_TASK_TIME_LIMIT = 30 * 60       # 30 min hard limit
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 min soft limit
+
+# Serialization — JSON only
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+
+# In DEBUG, run tasks synchronously (no Redis/worker needed for dev)
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=DEBUG)
+
+# Beat: periodic tasks
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    # Reconcile stale M-Pesa transactions every 60 seconds
+    "reconcile-mpesa-every-minute": {
+        "task": "mpesa.reconcile_pending_txns",
+        "schedule": 60.0,
+    },
+}
 
 # ---- MediCore business constants ----
-REGISTRATION_FEE = 200       # Ksh — collected at reception
-CONSULTATION_FEE = 500       # Ksh — consultation charge
-LOW_STOCK_THRESHOLD = 25     # Units — pharmacy low-stock alert
-SHA_DEFAULT_COVERAGE_PCT = 70  # % SHA covers by default in demo
+REGISTRATION_FEE = 200        # Ksh — collected at reception
+CONSULTATION_FEE = 500        # Ksh — consultation charge
+LOW_STOCK_THRESHOLD = 25      # Units — pharmacy low-stock alert
+SHA_DEFAULT_COVERAGE_PCT = 70 # % SHA covers by default in demo
 
 # ------------------------------------------------------------
 # Logging

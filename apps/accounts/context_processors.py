@@ -46,8 +46,8 @@ ROLE_COLORS = {
 }
 
 # Navigation items per role — mirrors the HTML prototype.
-# Only include links whose URL routes actually exist.
-# Missing routes are hidden until the relevant phase.
+# The `key` maps to a URL path via base.html's "href=/{{ item.key }}/".
+# Do NOT include a leading or trailing slash in the key.
 NAV_BY_ROLE = {
     "reception": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
@@ -60,10 +60,10 @@ NAV_BY_ROLE = {
         {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "doctor": [
-        {"key": "",         "label": "Home",      "icon": "🏠"},
-        {"key": "queue",    "label": "Queue",     "icon": "🧭"},
-        {"key": "lab/inbox","label": "Lab inbox", "icon": "📥"},
-        {"key": "patients", "label": "Patients",  "icon": "👥"},
+        {"key": "",           "label": "Home",      "icon": "🏠"},
+        {"key": "queue",      "label": "Queue",     "icon": "🧭"},
+        {"key": "lab/inbox",  "label": "Lab inbox", "icon": "📥"},
+        {"key": "patients",   "label": "Patients",  "icon": "👥"},
     ],
     "lab": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
@@ -76,11 +76,12 @@ NAV_BY_ROLE = {
         {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "accounts": [
-        {"key": "",         "label": "Home",     "icon": "🏠"},
-        {"key": "claims",   "label": "Claims",   "icon": "📋"},
-        {"key": "billing/ledger", "label": "Ledger", "icon": "📒"},
-        {"key": "audit",    "label": "Audit",    "icon": "🕵️"},
-        {"key": "patients", "label": "Patients", "icon": "👥"},
+        {"key": "",                  "label": "Home",     "icon": "🏠"},
+        {"key": "sha/claims",        "label": "Claims",   "icon": "📋"},
+        {"key": "billing/ledger",    "label": "Ledger",   "icon": "📒"},
+        {"key": "mpesa/transactions","label": "M-Pesa",   "icon": "📱"},
+        {"key": "audit",             "label": "Audit",    "icon": "🕵️"},
+        {"key": "patients",          "label": "Patients", "icon": "👥"},
     ],
 }
 
