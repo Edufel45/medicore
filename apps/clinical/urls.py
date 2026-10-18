@@ -21,6 +21,12 @@ urlpatterns = [
     path("doctor/lookup/",
          views.doctor_lookup, name="doctor_lookup"),
 
+    # Nurse - key-in lookup + stats
+    path("nurse/lookup/",
+         views.nurse_lookup, name="nurse_lookup"),
+    path("nurse/stats/",
+         views.nurse_stats, name="nurse_stats"),
+
     # Nurse
     path("visits/<str:queue_number>/vitals/",
          views.save_vitals, name="save_vitals"),

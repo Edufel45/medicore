@@ -16,6 +16,8 @@ The full clinical loop:
   /visits/<queue>/price-rx/<id>/ pharmacy sets price
   /visits/<queue>/collect/       pharmacy collects + dispenses + completes
   /lab/inbox/                    doctor's inbox (patients back from lab)
+  /doctor/lookup/                doctor's key-in lookup
+  /nurse/lookup/                 nurse's key-in lookup
   /api/drugs/                    drug autocomplete for prescription
   /api/labs/                     lab test autocomplete for orders
 """
@@ -262,7 +264,6 @@ def send_to_lab(request, queue_number):
         return redirect("clinical:visit_detail", queue_number=queue_number)
 
     with transaction.atomic():
-        # Re-order all existing tests (send back to lab)
         visit.lab_tests.filter(status="released").update(
             status="ordered",
             released_at=None,
@@ -280,6 +281,8 @@ def send_to_lab(request, queue_number):
 
     messages.success(request, f"{visit.queue_number} sent to Laboratory.")
     return redirect("clinical:queue")
+
+
 # ------------------------------------------------------------
 # Doctor — send to pharmacy
 # ------------------------------------------------------------
@@ -454,15 +457,12 @@ def add_lab_order(request, queue_number):
     return redirect("clinical:visit_detail", queue_number=queue_number)
 
 
+# ------------------------------------------------------------
+# Lab — release results
+# ------------------------------------------------------------
 @login_required
 @role_required("lab", "admin")
 def release_lab_results(request, queue_number):
-    """
-    POST /visits/<queue>/release-lab/
-
-    Saves lab results per test and sends the visit back to the doctor.
-    Mirrors save_vitals: one input per test, direct POST, no parsing.
-    """
     visit = get_object_or_404(Visit, queue_number=queue_number)
     if request.method != "POST":
         return redirect("clinical:visit_detail", queue_number=queue_number)
@@ -470,15 +470,11 @@ def release_lab_results(request, queue_number):
     with transaction.atomic():
         released_count = 0
         for lt in visit.lab_tests.all():
-            # Each test has an input named result_<id>
             field_name = f"result_{lt.id}"
             value = (request.POST.get(field_name) or "").strip()
-
-            # Skip tests with no value typed
             if not value:
                 continue
 
-            # Save or update the LabResult
             LabResult.objects.update_or_create(
                 lab_test=lt,
                 defaults={"value": value, "entered_by": request.user},
@@ -489,7 +485,6 @@ def release_lab_results(request, queue_number):
             lt.save(update_fields=["status", "released_at", "released_by"])
             released_count += 1
 
-        # Only move to doctor if at least one result was entered
         if released_count > 0:
             visit.stage = "doctor"
             visit.save(update_fields=["stage", "updated_at"])
@@ -511,15 +506,13 @@ def release_lab_results(request, queue_number):
 
     return redirect("clinical:queue")
 
+
 # ------------------------------------------------------------
 # Doctor — lab inbox
 # ------------------------------------------------------------
 @login_required
 @role_required("doctor", "admin")
 def lab_inbox(request):
-    """
-    /lab/inbox/ — patients returned from lab with released results.
-    """
     visits = (
         Visit.objects
         .filter(stage="doctor", lab_tests__status="released")
@@ -531,10 +524,7 @@ def lab_inbox(request):
 
     inbox = []
     for v in visits:
-        released = [
-            t for t in v.lab_tests.all()
-            if t.status == "released"
-        ]
+        released = [t for t in v.lab_tests.all() if t.status == "released"]
         if released:
             inbox.append({"visit": v, "released": released})
 
@@ -690,7 +680,7 @@ def collect_payment(request, queue_number):
 
 
 # ------------------------------------------------------------
-# Doctor — key-in lookup (paper-slip workflow)
+# Doctor — key-in lookup
 # ------------------------------------------------------------
 @login_required
 @role_required("doctor", "admin")
@@ -779,15 +769,158 @@ def doctor_lookup(request):
 
 
 # ------------------------------------------------------------
+# Nurse — key-in lookup
+# ------------------------------------------------------------
+@login_required
+@role_required("nurse", "admin")
+def nurse_lookup(request):
+    """
+    /nurse/lookup/ — the nurse's main workflow.
+
+    Accepts: System ID, queue number, or NID.
+    Only opens visits at the nurse stage (vitals awaiting).
+    """
+    sid = (request.GET.get("sid") or "").strip().upper()
+    visit = None
+    lookup_error = ""
+    lookup_status = ""
+
+    if sid:
+        # 1. Try System ID
+        patient = Patient.objects.filter(sid__iexact=sid).first()
+        if patient:
+            visit = (
+                Visit.objects
+                .filter(patient=patient, stage="nurse")
+                .select_related("patient")
+                .order_by("-started_at")
+                .first()
+            )
+            if not visit:
+                other = (
+                    Visit.objects
+                    .filter(patient=patient)
+                    .exclude(stage="done")
+                    .order_by("-started_at")
+                    .first()
+                )
+                if other:
+                    lookup_status = (
+                        f"Patient {patient.sid} is currently at "
+                        f"{other.get_stage_display()} — not yet at your counter."
+                    )
+                else:
+                    lookup_status = f"Patient {patient.sid} found but has no active visit."
+        else:
+            # 2. Try queue number
+            visit = (
+                Visit.objects
+                .filter(queue_number__iexact=sid, stage="nurse")
+                .select_related("patient")
+                .first()
+            )
+            if not visit:
+                # 3. Try NID
+                patient = Patient.objects.filter(national_id=sid).first()
+                if patient:
+                    visit = (
+                        Visit.objects
+                        .filter(patient=patient, stage="nurse")
+                        .select_related("patient")
+                        .order_by("-started_at")
+                        .first()
+                    )
+                    if not visit:
+                        lookup_status = f"Patient (NID {sid}) is not currently at your counter."
+                else:
+                    lookup_error = f'No patient found for "{sid}".'
+
+        if visit:
+            return redirect("clinical:visit_detail", queue_number=visit.queue_number)
+
+    recent = (
+        Visit.objects
+        .filter(stage="nurse")
+        .select_related("patient")
+        .order_by("-updated_at")[:5]
+    )
+
+    return render(request, "clinical/nurse_lookup.html", {
+        "sid": sid,
+        "lookup_error": lookup_error,
+        "lookup_status": lookup_status,
+        "recent": recent,
+        "pending_count": Visit.objects.filter(stage="nurse").count(),
+    })
+
+
+# ------------------------------------------------------------
+# Nurse — stat counts for home dashboard
+# ------------------------------------------------------------
+@login_required
+@role_required("nurse", "admin")
+def nurse_stats(request):
+    """
+    /nurse/stats/ — JSON with nurse dashboard counts.
+    Used by home_nurse.html to show live numbers.
+    """
+    from datetime import timedelta
+
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    awaiting = Visit.objects.filter(stage="nurse", req_vitals=True).count() if _has_req_vitals() else Visit.objects.filter(stage="nurse").count()
+    requested = Visit.objects.filter(stage="nurse").count()
+    completed_today = (
+        Vitals.objects
+        .filter(recorded_at__gte=today_start)
+        .count()
+    )
+
+    # Average time spent in nurse stage today (rough)
+    avg_min = 0
+    completed_visits = (
+        Visit.objects
+        .filter(
+            updated_at__gte=today_start,
+            stage="doctor",
+            vitals__recorded_at__gte=today_start,
+        )
+        .select_related("vitals")
+    )
+    durations = []
+    for v in completed_visits:
+        try:
+            durations.append(
+                int((v.updated_at - v.vitals.recorded_at).total_seconds() // 60)
+            )
+        except Exception:
+            pass
+    if durations:
+        avg_min = round(sum(durations) / len(durations))
+
+    return JsonResponse({
+        "awaiting": awaiting,
+        "requested": requested,
+        "completed_today": completed_today,
+        "avg_min": avg_min,
+    })
+
+
+def _has_req_vitals():
+    """Check if Vitals model has req_vitals field (defensive)."""
+    try:
+        Vitals.objects.filter(req_vitals=True).exists()
+        return True
+    except Exception:
+        return False
+
+
+# ------------------------------------------------------------
 # Autocomplete APIs
 # ------------------------------------------------------------
 @login_required
 @role_required("doctor", "pharmacy", "admin")
 def api_drug_search(request):
-    """
-    GET /api/drugs/?q=par
-    Returns up to 10 matching drugs.
-    """
     q = (request.GET.get("q") or "").strip().lower()
 
     if not q:
@@ -816,10 +949,6 @@ def api_drug_search(request):
 @login_required
 @role_required("doctor", "lab", "admin")
 def api_lab_search(request):
-    """
-    GET /api/labs/?q=mal
-    Returns up to 10 matching lab test names from the catalogue.
-    """
     from django.conf import settings
 
     q = (request.GET.get("q") or "").strip().lower()
