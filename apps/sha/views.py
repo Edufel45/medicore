@@ -218,3 +218,79 @@ def claim_set_status(request, claim_id):
 
     messages.success(request, f"Claim marked {new_status}.")
     return redirect("sha:claim_detail", claim_id=claim_id)
+
+
+# ------------------------------------------------------------
+# OTP endpoints for SHA verification
+# ------------------------------------------------------------
+import json
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+
+from .providers import get_sha_otp_provider
+
+
+@login_required
+@require_POST
+def send_otp_view(request):
+    """
+    POST /sha/send-otp/
+    Body: sha_number=..., phone=...
+
+    Returns JSON:
+      {"verification_id": "...", "masked_phone": "07XX...5678",
+       "dev_otp": "123456", "expires_in": 300}
+
+    In production, remove `dev_otp` — the OTP goes via SMS only.
+    """
+    sha_number = (request.POST.get("sha_number") or "").strip().upper()
+    phone = (request.POST.get("phone") or "").strip()
+
+    try:
+        provider = get_sha_otp_provider()
+        result = provider.send_otp(sha_number=sha_number, phone=phone)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        import logging
+        logging.getLogger("medicore").exception("send_otp failed: %s", exc)
+        return JsonResponse({"error": "Could not send code. Try again."}, status=500)
+
+    return JsonResponse(result)
+
+
+@login_required
+@require_POST
+def confirm_otp_view(request):
+    """
+    POST /sha/confirm-otp/
+    Body: verification_id=..., otp_code=...
+
+    Returns JSON:
+      {"status": "active"|"inactive"|"pending"|"unknown",
+       "patient_name": "...", "message": "..."}
+
+    On bad OTP: {"error": "..."} with HTTP 400.
+    """
+    verification_id = (request.POST.get("verification_id") or "").strip()
+    otp_code = (request.POST.get("otp_code") or "").strip()
+
+    if not verification_id or not otp_code:
+        return JsonResponse({"error": "Missing verification ID or code."}, status=400)
+
+    try:
+        provider = get_sha_otp_provider()
+        result = provider.verify_otp(verification_id=verification_id, otp_code=otp_code)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        import logging
+        logging.getLogger("medicore").exception("confirm_otp failed: %s", exc)
+        return JsonResponse({"error": "Could not verify code. Try again."}, status=500)
+
+    return JsonResponse({
+        "status": result.status,
+        "patient_name": result.patient_name,
+        "message": result.message,
+    })

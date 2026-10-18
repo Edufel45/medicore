@@ -39,6 +39,7 @@
             <th>SHA</th>
             <th>Status</th>
             <th>Created</th>
+            <th style="text-align:right">Slip</th>
           </tr>
         </thead>
         <tbody>
@@ -62,6 +63,18 @@
                 {% endif %}
               </td>
               <td style="color:var(--muted);font-size:.78rem">{{ p.created_at|date:"Y-m-d H:i" }}</td>
+              <td style="text-align:right">
+                {% with visit=p.visits.first %}
+                  {% if visit %}
+                    <a href="{% url 'patients:slip' visit.queue_number %}"
+                       style="background:var(--soft);color:var(--blue);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:.72rem;font-weight:700;text-decoration:none;display:inline-block">
+                      🖨 Slip
+                    </a>
+                  {% else %}
+                    <span style="color:var(--muted);font-size:.75rem">—</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

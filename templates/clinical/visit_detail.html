@@ -117,6 +117,29 @@
       font-size: .85rem; margin-bottom: 8px;
       display: flex; justify-content: space-between; align-items: center;
     }
+    /* autocomplete */
+    .ac-wrap { position: relative; flex: 1; }
+    .ac-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--card, #fff);
+      border: 1px solid var(--line, #e1e8f0);
+      border-radius: 10px;
+      box-shadow: 0 12px 30px -10px rgba(0,0,0,.35);
+      max-height: 240px; overflow-y: auto;
+      z-index: 50; margin-top: 4px; display: none;
+    }
+    .ac-dropdown.open { display: block; }
+    .ac-item {
+      padding: 10px 12px; cursor: pointer;
+      border-bottom: 1px solid var(--line, #e1e8f0);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .85rem;
+    }
+    .ac-item:last-child { border-bottom: 0; }
+    .ac-item:hover, .ac-item.active { background: rgba(15,166,138,.08); }
+    .ac-name { font-weight: 700; }
+    .ac-meta { color: var(--muted, #64748b); font-size: .72rem; font-family: ui-monospace, monospace; }
+    .ac-empty { padding: 12px; color: var(--muted, #64748b); font-size: .82rem; text-align: center; }
   </style>
 
   <div class="wb-split">
@@ -158,8 +181,6 @@
             </h1>
             <p class="sub" style="margin:0">
               {{ visit.queue_number }} ·
-              {% if patient.national_id %}NID {{ patient.national_id }} · {% endif %}
-              {{ patient.phone }} ·
               {{ patient.age|default:"?" }}y {{ patient.sex }} ·
               {{ visit.reason_for_visit|default:"—" }}
             </p>
@@ -183,15 +204,23 @@
           </span>
         </div>
 
-        {# ----- Identity card ----- #}
-        <div class="id-card">
-          <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
-          <div class="field mono"><small>National ID</small><b>{{ patient.national_id|default:"—" }}</b></div>
-          <div class="field mono"><small>Phone</small><b>{{ patient.phone }}</b></div>
-          <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
-          <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
-          <div class="field mono"><small>SHA</small><b>{{ patient.sha_number|default:"—" }}</b></div>
-        </div>
+        {# ----- Identity card (role-aware) ----- #}
+        {% if user_role == "reception" or user_role == "admin" %}
+          <div class="id-card">
+            <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+            <div class="field mono"><small>National ID</small><b>{{ patient.national_id|default:"—" }}</b></div>
+            <div class="field mono"><small>Phone</small><b>{{ patient.phone }}</b></div>
+            <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+            <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+            <div class="field mono"><small>SHA</small><b>{{ patient.sha_number|default:"—" }}</b></div>
+          </div>
+        {% else %}
+          <div class="id-card" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+            <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+            <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+          </div>
+        {% endif %}
 
         {# ============================================================ #}
         {# NURSE PANEL #}
@@ -288,7 +317,10 @@
                 {% if visit.stage == "doctor" %}
                   <form method="post" action="{% url 'clinical:add_prescription' visit.queue_number %}" style="display:flex;gap:8px;margin-top:10px">
                     {% csrf_token %}
-                    <input class="form-input" name="drug_name" placeholder="Type drug name, e.g. amoxicillin 500mg" autocomplete="off" required>
+                    <div class="ac-wrap">
+                      <input class="form-input" id="drugInput" name="drug_name" placeholder="Type drug name, e.g. amoxicillin 500mg" autocomplete="off" required>
+                      <div id="drugDropdown" class="ac-dropdown"></div>
+                    </div>
                     <button type="submit" class="btn-teal">Add</button>
                   </form>
                 {% endif %}
@@ -320,7 +352,10 @@
                 {% if visit.stage == "doctor" %}
                   <form method="post" action="{% url 'clinical:add_lab_order' visit.queue_number %}" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
                     {% csrf_token %}
-                    <input class="form-input" name="test_name" placeholder="e.g. Malaria test, Urinalysis, Blood sugar" style="flex:1;min-width:200px" required>
+                    <div class="ac-wrap" style="min-width:200px">
+                      <input class="form-input" id="labInput" name="test_name" placeholder="e.g. Malaria test, Urinalysis, Blood sugar" required>
+                      <div id="labDropdown" class="ac-dropdown"></div>
+                    </div>
                     <input class="form-input" name="test_price" type="number" placeholder="Ksh" value="300" style="width:100px">
                     <button type="submit" class="btn-teal">Order</button>
                   </form>
@@ -408,19 +443,28 @@
               {% endfor %}
 
               {% if visit.stage == "lab" %}
-                <div style="margin-top:14px">
-                  <label for="labRes">Enter results (one per line, format "Test name: value")</label>
-                  <textarea class="form-input" id="labRes" name="lab_results" rows="4"
-                            placeholder="Malaria test: Negative&#10;Urinalysis: Normal&#10;Blood sugar: 5.4 mmol/L"></textarea>
+                <form method="post" action="{% url 'clinical:release_lab_results' visit.queue_number %}" style="margin-top:14px">
+                  {% csrf_token %}
+                  <label>Enter results for each test</label>
 
-                  <form method="post" action="{% url 'clinical:release_lab_results' visit.queue_number %}" style="margin-top:10px">
-                    {% csrf_token %}
-                    <input type="hidden" name="lab_results" id="labResHidden">
-                    <button type="submit" class="btn-teal" onclick="document.getElementById('labResHidden').value=document.getElementById('labRes').value">
-                      ✓ Release results · send back to doctor
-                    </button>
-                  </form>
-                </div>
+                  {% for lt in lab_tests %}
+                    {% if lt.status != "released" %}
+                      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--soft);border:1px solid var(--line);border-radius:10px;margin-bottom:8px">
+                        <span style="font-weight:700;flex:1">{{ lt.name }}</span>
+                        <input class="form-input"
+                               type="text"
+                               name="result_{{ lt.id }}"
+                               placeholder="Enter result..."
+                               autocomplete="off"
+                               style="width:200px">
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+
+                  <button type="submit" class="btn-teal" style="margin-top:12px;width:100%">
+                    Save results · send back to doctor →
+                  </button>
+                </form>
               {% endif %}
             {% else %}
               <p class="sub" style="margin:0">No lab tests ordered.</p>
@@ -570,4 +614,68 @@
       </div>
     </div>
   </div>
+
+  <script>
+    (function() {
+      function setupAC(inputId, dropdownId, endpoint) {
+        var input = document.getElementById(inputId);
+        var dropdown = document.getElementById(dropdownId);
+        if (!input || !dropdown) return;
+
+        var debounceTimer = null;
+        var currentIndex = -1;
+
+        function close() {
+          dropdown.classList.remove("open");
+          dropdown.innerHTML = "";
+          currentIndex = -1;
+        }
+
+        function renderResults(results) {
+          if (!results.length) {
+            dropdown.innerHTML = '<div class="ac-empty">No matches</div>';
+            dropdown.classList.add("open");
+            return;
+          }
+          dropdown.innerHTML = results.map(function(r) {
+            var meta = r.price ? 'Ksh ' + r.price : '';
+            return '<div class="ac-item" data-value="' + r.name + '">' +
+              '<span class="ac-name">' + r.name + '</span>' +
+              '<span class="ac-meta">' + meta + '</span>' +
+              '</div>';
+          }).join("");
+          dropdown.classList.add("open");
+          currentIndex = -1;
+
+          dropdown.querySelectorAll(".ac-item").forEach(function(el) {
+            el.addEventListener("mousedown", function(e) {
+              e.preventDefault();
+              input.value = el.dataset.value;
+              close();
+              input.focus();
+            });
+          });
+        }
+
+        input.addEventListener("input", function() {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function() {
+            var q = input.value.trim();
+            if (q.length < 1) { close(); return; }
+            fetch(endpoint + "?q=" + encodeURIComponent(q))
+              .then(function(r) { return r.ok ? r.json() : { results: [] }; })
+              .then(function(data) { renderResults(data.results || []); })
+              .catch(function() { close(); });
+          }, 150);
+        });
+
+        input.addEventListener("blur", function() {
+          setTimeout(close, 200);
+        });
+      }
+
+      setupAC("drugInput", "drugDropdown", "/api/drugs/");
+      setupAC("labInput", "labDropdown", "/api/labs/");
+    })();
+  </script>
 {% endblock %}

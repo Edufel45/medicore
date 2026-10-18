@@ -1,0 +1,803 @@
+{% extends "base.html" %}
+{% block title %}{{ visit.queue_number }} · {{ patient.full_name }} — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .wb-split { display: grid; grid-template-columns: 260px 1fr; gap: 14px; align-items: start; }
+    @media (max-width: 900px) { .wb-split { grid-template-columns: 1fr; } }
+
+    .id-card { display: grid; gap: 12px; background: var(--soft, #f8fafc); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+    .id-card.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .id-card .field small { display: block; font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 800; margin-bottom: 2px; }
+    .id-card .field b { font-size: .9rem; }
+    .id-card .field.mono b { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--teal2, #0b8a73); }
+
+    .path { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+    .path .chip { background: rgba(15,166,138,.15); color: var(--teal2, #0b8a73); border-radius: 99px; padding: 3px 10px; font-size: .7rem; font-weight: 700; }
+
+    .panel { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 12px; background: var(--card); }
+    .panel.soft { background: var(--soft, #f8fafc); }
+    .panel-title { font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 800; margin-bottom: 10px; }
+
+    .badge { display: inline-block; border-radius: 99px; padding: 2px 10px; font-size: .7rem; font-weight: 800; white-space: nowrap; }
+    .b-active   { background: #dcf2e3; color: #0d5a27; }
+    .b-inactive { background: #fde4e1; color: #8f2a1e; }
+    .b-pending  { background: #fff0d1; color: #7a4a00; }
+    .b-n        { background: #e9eef4; color: #475569; }
+    .b-t        { background: #d9f3ee; color: #065f4e; }
+    .b-info     { background: #e2eefc; color: #0b4a8f; }
+
+    .form-input { width: 100%; padding: 9px 11px; border: 1.5px solid var(--line); border-radius: 9px; font: inherit; background: var(--card); color: var(--ink); }
+    .form-input:focus { outline: 0; border-color: var(--teal); }
+    label { display: block; font-size: .72rem; font-weight: 700; color: var(--muted); margin: 0 0 4px; }
+
+    .btn-teal { background: var(--teal); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-weight: 700; cursor: pointer; }
+    .btn-teal:hover { background: var(--teal2, #0b8a73); }
+    .btn-o { background: var(--card); color: var(--blue, #1664B0); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; }
+    .btn-o:hover { background: var(--soft); }
+    .btn-sm { padding: 6px 11px; font-size: .8rem; border-radius: 8px; }
+
+    /* Unified results panel */
+    .results-panel {
+      background: linear-gradient(135deg, rgba(15,166,138,.04), rgba(22,100,176,.04));
+      border: 1px solid rgba(15,166,138,.3);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+    .results-panel .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .results-panel .header h3 {
+      margin: 0;
+      font-size: .92rem;
+      color: var(--teal2);
+      font-weight: 800;
+    }
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 640px) {
+      .results-grid { grid-template-columns: 1fr; }
+    }
+    .result-block {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .result-block .block-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      font-weight: 800;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--line);
+      font-size: .85rem;
+    }
+    .result-row:last-child { border: 0; }
+    .result-row .label { color: var(--muted); font-weight: 600; }
+    .result-row .value {
+      font-family: ui-monospace, monospace;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .result-empty {
+      color: var(--muted);
+      font-size: .82rem;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* Autocomplete */
+    .ac-wrap { position: relative; }
+    .ac-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 12px 30px -10px rgba(0,0,0,.35);
+      max-height: 260px;
+      overflow-y: auto;
+      z-index: 20;
+      margin-top: 4px;
+      display: none;
+    }
+    .ac-dropdown.open { display: block; }
+    .ac-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .85rem;
+      transition: background .1s;
+    }
+    .ac-item:last-child { border: 0; }
+    .ac-item:hover,
+    .ac-item.active {
+      background: rgba(15,166,138,.08);
+    }
+    .ac-item .ac-name { font-weight: 700; }
+    .ac-item .ac-meta {
+      color: var(--muted);
+      font-size: .72rem;
+      font-family: ui-monospace, monospace;
+    }
+    .ac-empty {
+      padding: 12px;
+      color: var(--muted);
+      font-size: .82rem;
+      text-align: center;
+    }
+
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .row:last-child { border: 0; }
+    .row .l b { display: block; }
+    .row .l span { color: var(--muted); font-size: .78rem; }
+
+    .al { border-left: 4px solid var(--warn, #B76E00); background: var(--soft, #f8fafc); border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; font-size: .84rem; }
+    .al.g { border-color: var(--teal); background: rgba(15,166,138,.08); }
+    .al.r { border-color: var(--bad, #C0392B); background: rgba(192,57,43,.08); }
+    .al.i { border-color: var(--blue, #1664B0); background: rgba(22,100,176,.08); }
+
+    .rx-item { display: flex; justify-content: space-between; align-items: center; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; }
+    .rx-item b { font-weight: 700; }
+    .rx-item .meta { font-size: .75rem; color: var(--muted); margin-left: 8px; }
+    .rx-remove { border: 0; background: transparent; color: var(--bad, #C0392B); font-weight: 900; font-size: 1.1rem; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+    .rx-remove:hover { background: rgba(192,57,43,.1); }
+
+    /* Big action cards */
+    .action-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 4px; }
+    .action-btn { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: .92rem; border: 2px solid transparent; cursor: pointer; text-align: left; transition: transform .15s, box-shadow .15s, background .15s, border-color .15s; background: var(--card); color: var(--ink); }
+    .action-btn:hover { transform: translateY(-2px); }
+    .action-btn:active { transform: translateY(0); }
+    .action-btn .icon { font-size: 1.6rem; flex-shrink: 0; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; }
+    .action-btn .body { flex: 1; min-width: 0; }
+    .action-btn .body b { display: block; font-size: .92rem; font-weight: 800; margin-bottom: 2px; }
+    .action-btn .body small { display: block; color: var(--muted); font-size: .74rem; font-weight: 500; }
+    .action-btn .arrow { color: var(--muted); font-size: 1.2rem; font-weight: 800; transition: transform .15s; }
+    .action-btn:hover .arrow { transform: translateX(3px); color: inherit; }
+
+    .action-btn.lab { background: rgba(15,166,138,.06); border-color: rgba(15,166,138,.3); color: var(--teal2, #0b8a73); }
+    .action-btn.lab:hover { background: var(--teal); color: #fff; border-color: var(--teal); box-shadow: 0 10px 20px -10px rgba(15,166,138,.7); }
+    .action-btn.lab .icon { background: rgba(15,166,138,.15); color: var(--teal2); }
+    .action-btn.lab:hover .icon { background: rgba(255,255,255,.2); color: #fff; }
+    .action-btn.lab:hover .body small { color: rgba(255,255,255,.85); }
+
+    .action-btn.pharmacy { background: rgba(11,138,115,.06); border-color: rgba(11,138,115,.3); color: #0b8a73; }
+    .action-btn.pharmacy:hover { background: #0b8a73; color: #fff; border-color: #0b8a73; box-shadow: 0 10px 20px -10px rgba(11,138,115,.7); }
+    .action-btn.pharmacy .icon { background: rgba(11,138,115,.15); color: #0b8a73; }
+    .action-btn.pharmacy:hover .icon { background: rgba(255,255,255,.2); color: #fff; }
+    .action-btn.pharmacy:hover .body small { color: rgba(255,255,255,.85); }
+
+    .action-btn.vitals { background: rgba(124,58,237,.06); border-color: rgba(124,58,237,.3); color: #7c3aed; }
+    .action-btn.vitals:hover { background: #7c3aed; color: #fff; border-color: #7c3aed; box-shadow: 0 10px 20px -10px rgba(124,58,237,.7); }
+    .action-btn.vitals .icon { background: rgba(124,58,237,.15); color: #7c3aed; }
+    .action-btn.vitals:hover .icon { background: rgba(255,255,255,.2); color: #fff; }
+    .action-btn.vitals:hover .body small { color: rgba(255,255,255,.85); }
+  </style>
+
+  <div class="wb-split">
+
+    {# ---------- LEFT ---------- #}
+    <div class="card">
+      <h2 style="margin-top:0;font-size:.95rem">Quick links</h2>
+      <a class="btn-o btn-sm" href="{% url 'clinical:queue' %}" style="width:100%;text-align:center;margin-bottom:6px;box-sizing:border-box">
+        ← Queue board
+      </a>
+      {% if user_role == "doctor" or user_role == "admin" %}
+        <a class="btn-o btn-sm" href="{% url 'clinical:doctor_lookup' %}" style="width:100%;text-align:center;box-sizing:border-box">
+          🔍 Lookup
+        </a>
+      {% endif %}
+      {% if visit.stage == "done" %}
+        <a class="btn-o btn-sm" href="{% url 'billing:receipt' visit.queue_number %}" style="width:100%;text-align:center;margin-top:6px;box-sizing:border-box">
+          🧾 Receipt
+        </a>
+      {% endif %}
+    </div>
+
+    {# ---------- RIGHT ---------- #}
+    <div>
+      <div class="card">
+
+        {# ----- Header ----- #}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <span style="font-family:ui-monospace,monospace;font-size:.85rem;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:3px 10px;color:var(--teal2);font-weight:800">{{ patient.sid }}</span>
+            <h1 style="margin-top:6px">
+              {{ patient.full_name }}
+              <span class="badge {{ patient.sha_badge_class }}">
+                {% if patient.sha_status == "active" %}✓ SHA Active
+                {% elif patient.sha_status == "inactive" %}✗ SHA Inactive
+                {% elif patient.sha_status == "pending" %}⏳ SHA Pending
+                {% else %}? SHA Unknown{% endif %}
+              </span>
+            </h1>
+            <p class="sub" style="margin:0">
+              {{ visit.queue_number }} ·
+              {{ patient.age|default:"?" }}y {{ patient.sex }} ·
+              {{ visit.reason_for_visit|default:"—" }}
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="badge b-t">Now: {{ visit.get_stage_display }}</span>
+            {% if visit.stage == "done" %}
+              <a class="btn-o btn-sm" href="{% url 'billing:receipt' visit.queue_number %}">🧾 Receipt</a>
+            {% endif %}
+          </div>
+        </div>
+
+        {# ----- Journey chips ----- #}
+        <div class="path">
+          <span class="chip">Started {{ visit.started_at|date:"H:i" }}</span>
+          <span style="color:var(--muted)">·</span>
+          <span class="chip">Waiting {{ wait_min }} min</span>
+          <span style="color:var(--muted)">·</span>
+          <span class="chip">
+            Reg fee: {% if visit.registration_fee_paid %}✓ Paid{% else %}⏳ Unpaid{% endif %}
+          </span>
+        </div>
+
+        {# ----- Identity card (role-aware) ----- #}
+        {% include "partials/patient_identity.html" with patient=patient visit=visit %}
+
+        {# ============================================================ #}
+        {# NURSE PANEL — vitals form #}
+        {# ============================================================ #}
+        {% if user_role == "nurse" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">
+              Vitals
+              {% if visit.stage == "nurse" %}<span class="badge b-pending">Requested by doctor</span>{% endif %}
+            </div>
+
+            {% if visit.stage == "nurse" %}
+              <form method="post" action="{% url 'clinical:save_vitals' visit.queue_number %}">
+                {% csrf_token %}
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+                  <div><label>Blood pressure</label><input class="form-input" name="blood_pressure" value="{{ vitals.blood_pressure|default:'' }}" placeholder="e.g. 120/80"></div>
+                  <div><label>Temp (°C)</label><input class="form-input" name="temperature_c" value="{{ vitals.temperature_c|default:'' }}" placeholder="e.g. 36.8"></div>
+                  <div><label>Weight (kg)</label><input class="form-input" name="weight_kg" value="{{ vitals.weight_kg|default:'' }}" placeholder="e.g. 70"></div>
+                  <div><label>Pulse (bpm)</label><input class="form-input" name="pulse_bpm" value="{{ vitals.pulse_bpm|default:'' }}" placeholder="e.g. 76"></div>
+                </div>
+                <button type="submit" class="btn-teal" style="margin-top:12px">Save vitals · send back to doctor →</button>
+              </form>
+            {% else %}
+              <div class="al g">Vitals already sent to doctor.</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ============================================================ #}
+        {# DOCTOR PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "doctor" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">Consultation{% if visit.stage == "doctor" %} · you are here{% endif %}</div>
+
+            {% if visit.stage == "doctor" or visit.stage == "lab" %}
+
+              {# ----- UNIFIED RESULTS PANEL ----- #}
+              {% if vitals or lab_tests %}
+                <div class="results-panel">
+                  <div class="header">
+                    <h3>📋 Patient results</h3>
+                    <span class="badge b-info">Consolidated</span>
+                  </div>
+
+                  <div class="results-grid">
+
+                    {# ---- Vitals block ---- #}
+                    <div class="result-block">
+                      <div class="block-title">
+                        <span>🩺 Vitals</span>
+                        {% if vitals %}<span class="badge b-active">Recorded</span>{% endif %}
+                      </div>
+                      {% if vitals %}
+                        <div class="result-row">
+                          <span class="label">Blood pressure</span>
+                          <span class="value">{{ vitals.blood_pressure|default:"—" }}</span>
+                        </div>
+                        <div class="result-row">
+                          <span class="label">Temperature</span>
+                          <span class="value">{{ vitals.temperature_c|default:"—" }} °C</span>
+                        </div>
+                        <div class="result-row">
+                          <span class="label">Weight</span>
+                          <span class="value">{{ vitals.weight_kg|default:"—" }} kg</span>
+                        </div>
+                        <div class="result-row">
+                          <span class="label">Pulse</span>
+                          <span class="value">{{ vitals.pulse_bpm|default:"—" }} bpm</span>
+                        </div>
+                      {% else %}
+                        <div class="result-empty">No vitals recorded yet.</div>
+                      {% endif %}
+                    </div>
+
+                    {# ---- Lab block ---- #}
+                    <div class="result-block">
+                      <div class="block-title">
+                        <span>🔬 Lab results</span>
+                        {% if lab_tests %}
+                          {% with released_count=lab_tests|length %}
+                            <span class="badge b-active">{{ released_count }} test{{ released_count|pluralize }}</span>
+                          {% endwith %}
+                        {% endif %}
+                      </div>
+                      {% if lab_tests %}
+                        {% for lt in lab_tests %}
+                          <div class="result-row">
+                            <span class="label">{{ lt.name }}</span>
+                            {% if lt.status == "released" and lt.result %}
+                              <span class="value">{{ lt.result.value }}</span>
+                            {% elif lt.status == "released" %}
+                              <span class="badge b-active">Ready</span>
+                            {% else %}
+                              <span class="badge b-pending">{{ lt.get_status_display }}</span>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+                      {% else %}
+                        <div class="result-empty">No lab tests ordered yet.</div>
+                      {% endif %}
+                    </div>
+
+                  </div>
+                </div>
+              {% endif %}
+
+              {# ----- Diagnosis form ----- #}
+              <form method="post" action="{% url 'clinical:save_diagnosis' visit.queue_number %}" style="margin-top:14px">
+                {% csrf_token %}
+                <label>Diagnosis</label>
+                <input class="form-input" name="diagnosis" value="{{ diagnosis.text|default:'' }}" placeholder="Type diagnosis or ICD code…">
+                <button type="submit" class="btn-o btn-sm" style="margin-top:8px">Save diagnosis</button>
+              </form>
+
+              {# ----- Prescriptions ----- #}
+              <div class="panel soft" style="margin-top:14px">
+                <div class="panel-title" style="margin:0 0 8px">
+                  Prescription
+                  <span class="badge b-n" style="margin-left:6px">{{ prescriptions|length }}</span>
+                </div>
+
+                {% if prescriptions %}
+                  {% for rx in prescriptions %}
+                    <div class="rx-item">
+                      <div>
+                        <b>{{ rx.drug_name_typed }}</b>
+                        {% if rx.is_dispensed %}<span class="badge b-active" style="margin-left:8px">✓ Dispensed</span>{% endif %}
+                      </div>
+                      {% if not rx.is_dispensed and visit.stage == "doctor" %}
+                        <form method="post" action="{% url 'clinical:remove_prescription' visit.queue_number rx.id %}" style="margin:0">
+                          {% csrf_token %}
+                          <button type="submit" class="rx-remove" title="Remove">×</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <p class="sub" style="margin:0 0 8px">No drugs prescribed yet.</p>
+                {% endif %}
+
+                {% if visit.stage == "doctor" %}
+                  <form method="post" action="{% url 'clinical:add_prescription' visit.queue_number %}" style="display:flex;gap:8px;margin-top:10px;position:relative">
+                    {% csrf_token %}
+                    <div class="ac-wrap" style="flex:1">
+                      <input class="form-input"
+                             id="drugInput"
+                             name="drug_name"
+                             placeholder="Type drug name, e.g. para, amox…"
+                             autocomplete="off"
+                             required>
+                      <div class="ac-dropdown" id="drugDropdown"></div>
+                    </div>
+                    <button type="submit" class="btn-teal">Add</button>
+                  </form>
+                {% endif %}
+              </div>
+
+              {# ----- Lab orders ----- #}
+              <div class="panel soft" style="margin-top:14px">
+                <div class="panel-title" style="margin:0 0 8px">
+                  Lab orders
+                  <span class="badge b-n" style="margin-left:6px">{{ lab_tests|length }}</span>
+                </div>
+
+                {% if lab_tests %}
+                  {% for lt in lab_tests %}
+                    <div class="row">
+                      <div class="l">
+                        <b>{{ lt.name }}</b>
+                        <span>{% if lt.status == "released" %}Result released{% else %}{{ lt.get_status_display }}{% endif %}</span>
+                      </div>
+                      <span class="badge {% if lt.status == 'released' %}b-active{% else %}b-pending{% endif %}">
+                        {% if lt.status == "released" %}✓ Done{% else %}⏳ Pending{% endif %}
+                      </span>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <p class="sub" style="margin:0 0 8px">No lab tests ordered.</p>
+                {% endif %}
+
+                {% if visit.stage == "doctor" %}
+                  <form method="post" action="{% url 'clinical:add_lab_order' visit.queue_number %}" style="display:flex;gap:8px;margin-top:10px;position:relative">
+                    {% csrf_token %}
+                    <div class="ac-wrap" style="flex:1">
+                      <input class="form-input"
+                             id="labInput"
+                             name="test_name"
+                             placeholder="Type test name, e.g. mal, blood…"
+                             autocomplete="off"
+                             required>
+                      <input type="hidden" name="test_price" value="0">
+                      <div class="ac-dropdown" id="labDropdown"></div>
+                    </div>
+                    <button type="submit" class="btn-teal" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">
+                      🔬 Add test order
+                    </button>
+                  </form>
+                {% endif %}
+              </div>
+
+              {# ----- Routing actions ----- #}
+              <div style="margin-top:20px">
+                <label style="text-transform:uppercase;letter-spacing:.6px;font-weight:800;font-size:.72rem;color:var(--muted);margin-bottom:10px">
+                  Send patient to…
+                </label>
+
+                {% if visit.stage == "doctor" %}
+                  <div class="action-row">
+                    {% if lab_tests %}
+                      <form method="post" action="{% url 'clinical:send_to_lab' visit.queue_number %}" style="margin:0">
+                        {% csrf_token %}
+                        <button type="submit" class="action-btn lab" style="width:100%">
+                          <span class="icon">🔬</span>
+                          <span class="body">
+                            <b>Send to Laboratory</b>
+                            <small>{{ lab_tests|length }} test{{ lab_tests|length|pluralize }} ordered</small>
+                          </span>
+                          <span class="arrow">→</span>
+                        </button>
+                      </form>
+                    {% endif %}
+
+                    {% if prescriptions %}
+                      <form method="post" action="{% url 'clinical:send_to_pharmacy' visit.queue_number %}" style="margin:0">
+                        {% csrf_token %}
+                        <button type="submit" class="action-btn pharmacy" style="width:100%">
+                          <span class="icon">💊</span>
+                          <span class="body">
+                            <b>Send to Pharmacy</b>
+                            <small>{{ prescriptions|length }} drug{{ prescriptions|length|pluralize }} prescribed</small>
+                          </span>
+                          <span class="arrow">→</span>
+                        </button>
+                      </form>
+                    {% endif %}
+
+                    {% if not vitals %}
+                      <form method="post" action="{% url 'clinical:request_vitals' visit.queue_number %}" style="margin:0">
+                        {% csrf_token %}
+                        <button type="submit" class="action-btn vitals" style="width:100%">
+                          <span class="icon">🩺</span>
+                          <span class="body">
+                            <b>Request Vitals</b>
+                            <small>Ask the nurse to record</small>
+                          </span>
+                          <span class="arrow">→</span>
+                        </button>
+                      </form>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  <div class="al i" style="margin-top:8px">
+                    ℹ️ Patient is currently at <b>{{ visit.get_stage_display }}</b>. Actions unavailable here.
+                  </div>
+                {% endif %}
+              </div>
+
+            {% else %}
+              <p class="sub" style="margin:0">Patient is currently at {{ visit.get_stage_display }}.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ============================================================ #}
+        {# LAB PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "lab" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">Laboratory{% if visit.stage == "lab" %} · you are here{% endif %}</div>
+            {% if lab_tests %}
+              {% for lt in lab_tests %}
+                <div class="row">
+                  <div class="l">
+                    <b>{{ lt.name }}</b>
+                    <span>
+                      {% if lt.status == "released" %}Result released to doctor
+                      {% else %}Awaiting result entry{% endif %}
+                    </span>
+                  </div>
+                  <span class="badge {% if lt.status == 'released' %}b-active{% else %}b-pending{% endif %}">
+                    {% if lt.status == "released" %}✓ Done{% else %}⏳ Pending{% endif %}
+                  </span>
+                </div>
+              {% endfor %}
+{% if visit.stage == "lab" %}
+  <form method="post" action="{% url 'clinical:release_lab_results' visit.queue_number %}" style="margin-top:14px">
+    {% csrf_token %}
+    <label for="labRes">Enter results (one per line, format "Test name: value")</label>
+    <textarea class="form-input"
+              id="labRes"
+              name="lab_results"
+              rows="4"
+              placeholder="Malaria test: Negative&#10;Urinalysis: Normal&#10;Blood sugar: 5.4 mmol/L"></textarea>
+
+    <button type="submit" class="btn-teal" style="margin-top:10px">
+      ✓ Release results · send back to doctor
+    </button>
+  </form>
+{% endif %}
+            {% else %}
+              <p class="sub" style="margin:0">No lab tests ordered.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ============================================================ #}
+        {# PHARMACY PANEL #}
+        {# ============================================================ #}
+        {% if user_role == "pharmacy" or user_role == "admin" %}
+          <div class="panel">
+            <div class="panel-title">Pharmacy{% if visit.stage == "pharmacy" %} · you are here{% endif %}</div>
+
+            {% if prescriptions %}
+              {% for rx in prescriptions %}
+                <div class="row">
+                  <div class="l">
+                    <b>{{ rx.drug_name_typed }}</b>
+                    <span>
+                      {% if rx.drug %}Ksh {{ rx.drug.price_ksh }} · stock {{ rx.drug.total_stock }}
+                      {% else %}New drug · needs price{% endif %}
+                    </span>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    {% if rx.drug %}
+                      <span class="badge b-active">✓ Priced</span>
+                    {% else %}
+                      <form method="post" action="{% url 'clinical:price_prescription' visit.queue_number rx.id %}" style="display:flex;gap:4px;margin:0">
+                        {% csrf_token %}
+                        <input class="form-input" name="price" type="number" placeholder="Ksh" style="width:90px;padding:6px 8px;font-size:.8rem">
+                        <button type="submit" class="btn-o btn-sm">Set price</button>
+                      </form>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p class="sub" style="margin:0">Nothing prescribed.</p>
+            {% endif %}
+
+            {% if bill %}
+              <div class="panel soft" style="margin-top:12px">
+                <div class="panel-title" style="margin:0 0 6px">Bill</div>
+                {% for li in bill.line_items.all %}
+                  <div class="row">
+                    <div class="l"><b>{{ li.label }}</b></div>
+                    <b>Ksh {{ li.amount }}</b>
+                  </div>
+                {% endfor %}
+                <div class="row" style="border-top:2px solid var(--line);padding-top:10px;margin-top:6px">
+                  <b>Total</b>
+                  <b>Ksh {{ bill.total_amount }}</b>
+                </div>
+                <div class="row">
+                  <span>Paid</span>
+                  <b style="color:{% if bill.paid_amount > 0 %}#14803C{% else %}#B76E00{% endif %}">
+                    Ksh {{ bill.paid_amount }}
+                  </b>
+                </div>
+                <div class="row">
+                  <span>Balance due</span>
+                  <b style="color:{% if bill.balance_due <= 0 %}#14803C{% else %}#C0392B{% endif %}">
+                    Ksh {{ bill.balance_due }}
+                  </b>
+                </div>
+              </div>
+
+              {% if visit.stage == "pharmacy" and bill.balance_due > 0 %}
+                <form method="post" action="{% url 'clinical:collect_payment' visit.queue_number %}" style="margin-top:12px">
+                  {% csrf_token %}
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <label style="margin:0;font-size:.72rem;font-weight:700;color:var(--muted)">Method</label>
+                    <select name="method" class="form-input" style="width:auto">
+                      <option value="mpesa">M-Pesa</option>
+                      <option value="cash">Cash</option>
+                    </select>
+                    <button type="submit" class="btn-teal">Collect Ksh {{ bill.balance_due }} &amp; complete →</button>
+                  </div>
+                </form>
+              {% elif visit.stage == "pharmacy" and bill.balance_due <= 0 %}
+                <div class="al g" style="margin-top:12px">Bill already settled. Patient can be discharged.</div>
+              {% endif %}
+
+              {% with txn=visit.mpesa_transactions.last %}
+                {% if txn %}
+                  <div class="panel soft" style="margin-top:12px">
+                    <div class="panel-title" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center">
+                      <span>📱 M-Pesa transaction</span>
+                      <span class="badge
+                        {% if txn.status == 'success' %}b-active
+                        {% elif txn.status == 'failed' %}b-inactive
+                        {% elif txn.status == 'pending' %}b-pending
+                        {% else %}b-n{% endif %}">
+                        {{ txn.get_status_display }}
+                      </span>
+                    </div>
+                    <div class="row"><span>Amount</span><b>Ksh {{ txn.amount }}</b></div>
+                    <div class="row"><span>Phone</span><b style="font-family:ui-monospace,monospace">{{ txn.phone }}</b></div>
+                    {% if txn.mpesa_receipt %}
+                      <div class="row"><span>Receipt</span><b style="font-family:ui-monospace,monospace">{{ txn.mpesa_receipt }}</b></div>
+                    {% endif %}
+                    {% if txn.status in "initiated,pending" %}
+                      <form method="post" action="{% url 'mpesa:simulate_callback' txn.id %}" style="margin-top:10px">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-o btn-sm">🧪 Simulate callback (dev)</button>
+                      </form>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              {% endwith %}
+            {% endif %}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================ #}
+  {# AUTOCOMPLETE JS #}
+  {# ============================================================ #}
+  <script>
+    (function () {
+      const debounce = (fn, ms) => {
+        let t;
+        return (...args) => {
+          clearTimeout(t);
+          t = setTimeout(() => fn(...args), ms);
+        };
+      };
+
+      function setupAutocomplete(opts) {
+        const input = document.getElementById(opts.inputId);
+        const dropdown = document.getElementById(opts.dropdownId);
+        if (!input || !dropdown) return;
+
+        let currentIndex = -1;
+
+        function close() {
+          dropdown.classList.remove("open");
+          dropdown.innerHTML = "";
+          currentIndex = -1;
+        }
+
+        function renderResults(results) {
+          if (!results.length) {
+            dropdown.innerHTML = '<div class="ac-empty">No matches</div>';
+            dropdown.classList.add("open");
+            currentIndex = -1;
+            return;
+          }
+          dropdown.innerHTML = results
+            .map((r, i) => {
+              const meta = opts.metaField ? opts.metaField(r) : "";
+              return `<div class="ac-item" data-value="${r.name}" data-index="${i}">
+                <span class="ac-name">${r.name}</span>
+                <span class="ac-meta">${meta}</span>
+              </div>`;
+            })
+            .join("");
+          dropdown.classList.add("open");
+          currentIndex = -1;
+
+          dropdown.querySelectorAll(".ac-item").forEach((el) => {
+            el.addEventListener("mousedown", (e) => {
+              e.preventDefault();
+              input.value = el.dataset.value;
+              close();
+              input.focus();
+            });
+          });
+        }
+
+        function setActive(idx) {
+          const items = dropdown.querySelectorAll(".ac-item");
+          items.forEach((el, i) => el.classList.toggle("active", i === idx));
+          if (idx >= 0 && items[idx]) {
+            items[idx].scrollIntoView({ block: "nearest" });
+          }
+          currentIndex = idx;
+        }
+
+        input.addEventListener("input", debounce(async function () {
+          const q = input.value.trim();
+          if (q.length < 2) {
+            close();
+            return;
+          }
+          try {
+            const res = await fetch(`${opts.endpoint}?q=${encodeURIComponent(q)}`);
+            if (!res.ok) { close(); return; }
+            const data = await res.json();
+            renderResults(data.results || []);
+          } catch {
+            close();
+          }
+        }, 200));
+
+        input.addEventListener("keydown", function (e) {
+          const items = dropdown.querySelectorAll(".ac-item");
+          if (!items.length) return;
+
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive(Math.min(currentIndex + 1, items.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive(Math.max(currentIndex - 1, 0));
+          } else if (e.key === "Enter") {
+            if (currentIndex >= 0 && items[currentIndex]) {
+              e.preventDefault();
+              input.value = items[currentIndex].dataset.value;
+              close();
+            }
+          } else if (e.key === "Escape") {
+            close();
+          }
+        });
+
+        input.addEventListener("blur", function () {
+          setTimeout(close, 150);
+        });
+      }
+
+            setupAutocomplete({
+        inputId: "drugInput",
+        dropdownId: "drugDropdown",
+        endpoint: "/api/drugs/",
+        metaField: (r) => (r.price ? `Ksh ${r.price}` : ""),
+      });
+
+      setupAutocomplete({
+        inputId: "labInput",
+        dropdownId: "labDropdown",
+        endpoint: "/api/labs/",
+        metaField: (r) => (r.price ? `Ksh ${r.price}` : ""),
+      });
+    })();
+  </script>
+
+{% endblock %}

@@ -262,3 +262,121 @@ def get_sha_provider() -> SHAProvider:
     if provider == "real":
         return RealSHAProvider()
     return MockSHAProvider()
+
+
+# ------------------------------------------------------------
+# OTP verification (SHA Taifa Care-style)
+# ------------------------------------------------------------
+class SHAOTPProvider:
+    """
+    Extends SHAProvider with OTP challenge-based verification.
+
+    Two-step flow:
+      1. send_otp(sha_number, phone) → returns verification_id
+         SHA (mock) "sends" a 6-digit OTP to the patient's phone.
+      2. verify_otp(verification_id, otp_code) → returns EligibilityResult
+         The OTP is validated; if correct, eligibility is returned.
+
+    The mock provider generates the OTP deterministically from
+    the SHA number so it's printable in the demo. The real provider
+    will use a real SMS gateway.
+    """
+
+    def send_otp(self, sha_number: str, phone: str) -> dict:
+        """
+        Send an OTP to `phone`. Returns:
+          {"verification_id": "...", "expires_in": 300, "masked_phone": "07XX…5678", "dev_otp": "123456"}
+        """
+        raise NotImplementedError
+
+    def verify_otp(self, verification_id: str, otp_code: str) -> "EligibilityResult":
+        """
+        Validate the OTP. Returns an EligibilityResult.
+        Raises ValueError if the OTP is wrong or expired.
+        """
+        raise NotImplementedError
+
+
+class MockSHAOTPProvider(SHAOTPProvider):
+    """
+    Mock OTP provider. Uses Django cache to store pending challenges.
+
+    In DEMO mode, `send_otp()` returns the OTP in the response so
+    the receptionist can see it (pretend the patient's phone beeped
+    and they read it out). In production, this field is removed.
+    """
+
+    CACHE_KEY_PREFIX = "sha_otp:"
+    OTP_TTL = 300  # seconds
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def _generate_otp(sha_number: str) -> str:
+        """
+        Deterministic 6-digit code from SHA number.
+        Real provider would use random.randint(100000, 999999).
+        """
+        import hashlib
+        h = int(hashlib.md5(("OTP" + sha_number.upper()).encode()).hexdigest(), 16)
+        return f"{h % 1000000:06d}"
+
+    def send_otp(self, sha_number: str, phone: str) -> dict:
+        import uuid
+        from django.core.cache import cache
+
+        sha_number = (sha_number or "").strip().upper()
+        phone = (phone or "").strip()
+
+        if not sha_number:
+            raise ValueError("SHA number is required.")
+        if not phone:
+            raise ValueError("Phone number is required.")
+
+        verification_id = str(uuid.uuid4())
+        otp = self._generate_otp(sha_number)
+
+        cache.set(
+            f"{self.CACHE_KEY_PREFIX}{verification_id}",
+            {"sha_number": sha_number, "phone": phone, "otp": otp},
+            self.OTP_TTL,
+        )
+
+        # Mask the phone for the UI: 0712345678 → 07XX…5678
+        masked = phone
+        if len(phone) >= 6:
+            masked = phone[:2] + "XX" + "…" + phone[-4:]
+
+        return {
+            "verification_id": verification_id,
+            "expires_in": self.OTP_TTL,
+            "masked_phone": masked,
+            "dev_otp": otp,  # ← REMOVE IN PRODUCTION
+        }
+
+    def verify_otp(self, verification_id: str, otp_code: str) -> "EligibilityResult":
+        from django.core.cache import cache
+
+        key = f"{self.CACHE_KEY_PREFIX}{verification_id}"
+        data = cache.get(key)
+
+        if not data:
+            raise ValueError("OTP expired or invalid. Send a new code.")
+
+        otp_code = (otp_code or "").strip()
+        if otp_code != data["otp"]:
+            raise ValueError("Incorrect code. Try again.")
+
+        # OTP is correct — return eligibility for the SHA number
+        eligibility = MockSHAProvider(simulate_latency=False).verify_eligibility(data["sha_number"])
+        cache.delete(key)
+        return eligibility
+
+
+def get_sha_otp_provider():
+    """
+    Return the configured OTP provider.
+    Always returns the mock for now — replace when real SHA API is available.
+    """
+    return MockSHAOTPProvider()

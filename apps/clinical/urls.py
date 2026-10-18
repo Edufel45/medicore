@@ -1,5 +1,5 @@
 """
-MediCore — Clinical URLs
+MediCore - Clinical URLs
 ============================================================
 Namespace: clinical
 """
@@ -11,17 +11,21 @@ from . import views
 app_name = "clinical"
 
 urlpatterns = [
-    # Queue + workbench
+    # Queue board + workbench
     path("queue/",
          views.queue_board, name="queue"),
     path("visits/<str:queue_number>/",
          views.visit_detail, name="visit_detail"),
 
+    # Doctor - key-in lookup (paper slip workflow)
+    path("doctor/lookup/",
+         views.doctor_lookup, name="doctor_lookup"),
+
     # Nurse
     path("visits/<str:queue_number>/vitals/",
          views.save_vitals, name="save_vitals"),
 
-    # Doctor — routing
+    # Doctor - routing
     path("visits/<str:queue_number>/request-vitals/",
          views.request_vitals, name="request_vitals"),
     path("visits/<str:queue_number>/send-to-lab/",
@@ -29,7 +33,7 @@ urlpatterns = [
     path("visits/<str:queue_number>/send-to-pharmacy/",
          views.send_to_pharmacy, name="send_to_pharmacy"),
 
-    # Doctor — consultation
+    # Doctor - consultation
     path("visits/<str:queue_number>/save-diagnosis/",
          views.save_diagnosis, name="save_diagnosis"),
     path("visits/<str:queue_number>/add-rx/",
@@ -50,4 +54,8 @@ urlpatterns = [
          views.price_prescription, name="price_prescription"),
     path("visits/<str:queue_number>/collect/",
          views.collect_payment, name="collect_payment"),
+
+    # Autocomplete APIs
+    path("api/drugs/", views.api_drug_search, name="api_drugs"),
+    path("api/labs/",  views.api_lab_search,  name="api_labs"),
 ]

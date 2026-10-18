@@ -1,0 +1,97 @@
+{% comment %}
+============================================================
+Patient identity card — role-aware.
+
+Usage:
+  {% include "partials/patient_identity.html" with patient=patient visit=visit %}
+
+Rules:
+  - Reception: full identity (NID, phone, SHA)
+  - Everyone else: name, age, sex, SID, + role-specific context
+============================================================
+{% endcomment %}
+
+<style>
+  .id-card {
+    display: grid;
+    gap: 12px;
+    background: var(--soft, #f8fafc);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 10px 0;
+  }
+  .id-card.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .id-card.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .id-card .field small {
+    display: block;
+    font-size: .68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 800;
+    margin-bottom: 2px;
+  }
+  .id-card .field b {
+    font-size: .9rem;
+  }
+  .id-card .field.mono b {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: var(--teal2, #0b8a73);
+  }
+  @media (max-width: 640px) {
+    .id-card.cols-3, .id-card.cols-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>
+
+{% if current_role == "reception" or current_role == "admin" %}
+
+  {# ---------- Full identity card (reception only) ---------- #}
+  <div class="id-card cols-3">
+    <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+    <div class="field mono"><small>National ID</small><b>{{ patient.national_id|default:"—" }}</b></div>
+    <div class="field mono"><small>Phone</small><b>{{ patient.phone }}</b></div>
+    <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+    <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+    <div class="field mono"><small>SHA</small><b>{{ patient.sha_number|default:"—" }}</b></div>
+  </div>
+
+{% elif current_role == "doctor" or current_role == "nurse" %}
+
+  {# ---------- Clinical identity (name, age, sex, SID) ---------- #}
+  <div class="id-card cols-3">
+    <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+    <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+    <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+  </div>
+
+{% elif current_role == "lab" %}
+
+  {# ---------- Lab identity ---------- #}
+  <div class="id-card cols-3">
+    <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+    <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+    <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+  </div>
+
+{% elif current_role == "pharmacy" %}
+
+  {# ---------- Pharmacy identity ---------- #}
+  <div class="id-card cols-3">
+    <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+    <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+    <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+  </div>
+
+{% else %}
+
+  {# ---------- Fallback (admin without role, guest) ---------- #}
+  <div class="id-card cols-3">
+    <div class="field mono"><small>System ID</small><b>{{ patient.sid }}</b></div>
+    <div class="field"><small>Age</small><b>{{ patient.age|default:"?" }} yrs</b></div>
+    <div class="field"><small>Sex</small><b>{{ patient.sex }}</b></div>
+  </div>
+
+{% endif %}

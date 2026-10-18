@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Lab inbox — MediCore{% endblock %}
+{% block title %}Lab inbox - MediCore{% endblock %}
 
 {% block content %}
   <h1>Lab results inbox</h1>
@@ -70,13 +70,6 @@
       display: inline-block;
     }
     .btn-teal:hover { background: var(--teal2, #0b8a73); }
-    .btn-o {
-      background: var(--card); color: var(--blue, #1664B0);
-      border: 1.5px solid var(--line); border-radius: 10px;
-      padding: 10px 16px; font-weight: 700; cursor: pointer; text-decoration: none;
-      display: inline-block;
-    }
-    .btn-o:hover { background: var(--soft); }
   </style>
 
   {% if inbox %}
@@ -86,31 +79,29 @@
           <div>
             <span class="inbox-sid">{{ entry.visit.patient.sid }}</span>
             <h2 style="margin: 6px 0 2px; font-size: 1.1rem">
-              {{ entry.visit.queue_number }} · {{ entry.visit.patient.full_name }}
+              {{ entry.visit.queue_number }} - {{ entry.visit.patient.full_name }}
             </h2>
             <p class="sub" style="margin: 0; font-size: .85rem">
-              {{ entry.visit.patient.age|default:"?" }} yrs · {{ entry.visit.patient.sex }} ·
-              {% if entry.visit.patient.national_id %}NID {{ entry.visit.patient.national_id }} · {% endif %}
-              {{ entry.visit.patient.phone }}
+              {{ entry.visit.patient.age|default:"?" }} yrs - {{ entry.visit.patient.sex }}
             </p>
           </div>
           <div style="display: flex; gap: 6px; flex-direction: column; align-items: flex-end">
             <span class="badge b-t">Ready to review</span>
             {% if entry.visit.patient.sha_status == "active" %}
-              <span class="badge b-active">✓ SHA Active</span>
+              <span class="badge b-active">SHA Active</span>
             {% endif %}
           </div>
         </div>
 
         <div class="lab-list">
           <div style="font-weight: 800; color: var(--teal2, #0b8a73); font-size: .85rem; margin-bottom: 6px">
-            🧪 Lab results
+            Lab results
           </div>
           {% for lt in entry.released %}
             <div class="lab-row">
               <span class="name">{{ lt.name }}</span>
               <span class="val">
-                {% if lt.result %}{{ lt.result.value }}{% else %}✓ Ready{% endif %}
+                {% if lt.result %}{{ lt.result.value }}{% else %}Ready{% endif %}
               </span>
             </div>
           {% endfor %}
@@ -118,7 +109,7 @@
 
         <div style="display: flex; gap: 8px; flex-wrap: wrap">
           <a class="btn-teal" href="{% url 'clinical:visit_detail' entry.visit.queue_number %}">
-            Review &amp; continue →
+            Review and continue &rarr;
           </a>
         </div>
       </div>

@@ -16,11 +16,28 @@
     <div class="brand">M</div>
 
     {% for item in nav_items %}
-      <a class="nv {% if request.resolver_match and item.key in request.path %}on{% endif %}"
-         href="/{{ item.key }}/"
-         title="{{ item.label }}">
-        <i>{{ item.icon }}</i>{{ item.label }}
-      </a>
+      {% if item.key %}
+        {% with full_path="/"|add:item.key %}
+          <a class="nv {% if request.path == full_path or request.path == full_path|add:'/' %}on{% endif %}"
+             href="{{ full_path }}/"
+             title="{{ item.label }}">
+            <i>{{ item.icon }}</i>{{ item.label }}
+            {% if item.key == "lab/inbox" and notifications.lab_ready %}
+              <span class="nv-badge">{{ notifications.lab_ready }}</span>
+            {% elif item.key == "queue" and notifications.pending %}
+              <span class="nv-badge">{{ notifications.pending }}</span>
+            {% elif item.key == "sha/claims" and notifications.pending %}
+              <span class="nv-badge">{{ notifications.pending }}</span>
+            {% endif %}
+          </a>
+        {% endwith %}
+      {% else %}
+        <a class="nv {% if request.path == '/' %}on{% endif %}"
+           href="/"
+           title="{{ item.label }}">
+          <i>{{ item.icon }}</i>{{ item.label }}
+        </a>
+      {% endif %}
     {% endfor %}
 
     <div class="sp"></div>
@@ -38,9 +55,10 @@
         MediCore<small>Sample Hospital · OPD</small>
       </div>
 
-      <div class="srch">
+      <a href="{% url 'patients:list' %}" class="srch" style="text-decoration:none;color:inherit">
         🔍 <span>Search patients…</span>
-      </div>
+        <kbd>Ctrl K</kbd>
+      </a>
 
       <div class="role">
         <span>Signed in as</span>
@@ -48,7 +66,39 @@
       </div>
 
       {% if user.is_authenticated %}
-        <a href="{% url 'accounts:logout' %}" class="themeBtn" title="Sign out">⎋</a>
+        <div class="notif-wrap">
+          <button class="bell" id="notifBtn" onclick="toggleNotifications(event)" aria-label="Notifications">
+            🔔
+            {% if notifications.total > 0 %}
+              <span class="notif-count">{{ notifications.total }}</span>
+            {% endif %}
+          </button>
+          <div class="notif-dropdown" id="notifDropdown">
+            <div class="notif-header">
+              <b>Notifications</b>
+              {% if notifications.total > 0 %}
+                <span class="notif-count-badge">{{ notifications.total }} new</span>
+              {% endif %}
+            </div>
+            {% if notifications.items %}
+              <div class="notif-list">
+                {% for item in notifications.items %}
+                  <a href="{{ item.url }}" class="notif-item">
+                    <span class="notif-icon">{{ item.icon }}</span>
+                    <span class="notif-text">{{ item.label }}</span>
+                    <span class="notif-arrow">→</span>
+                  </a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="notif-empty">
+                You're all caught up.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <a href="{% url 'accounts:logout' %}" class="themeBtn" title="Sign out" aria-label="Sign out">⎋</a>
       {% endif %}
     </header>
 
@@ -69,6 +119,48 @@
     </main>
   </div>
 </div>
+
+{# ================= Floating Action Button ================= #}
+{# Only shown to the receptionist — quickly jump to registration #}
+{% if current_role == "reception" or current_role == "admin" %}
+  {% block fab %}
+    <a href="{% url 'patients:register' %}"
+       class="fab"
+       title="Register a new patient"
+       aria-label="Register a new patient">
+      New patient
+    </a>
+  {% endblock %}
+{% endif %}
+
+{# ================= Notification toggle JS ================= #}
+<script>
+  function toggleNotifications(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById("notifDropdown");
+    if (dropdown) dropdown.classList.toggle("open");
+  }
+
+  // Close dropdown when clicking outside
+  document.addEventListener("click", function (e) {
+    const dropdown = document.getElementById("notifDropdown");
+    const btn = document.getElementById("notifBtn");
+    if (!dropdown) return;
+    if (dropdown.classList.contains("open")) {
+      if (!dropdown.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+        dropdown.classList.remove("open");
+      }
+    }
+  });
+
+  // Close dropdown on Escape
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      const dropdown = document.getElementById("notifDropdown");
+      if (dropdown) dropdown.classList.remove("open");
+    }
+  });
+</script>
 
 {% block extra_js %}{% endblock %}
 

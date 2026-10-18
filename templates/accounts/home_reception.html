@@ -2,20 +2,102 @@
 {% block title %}Reception — MediCore{% endblock %}
 
 {% block content %}
+  <style>
+    .qa-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .qa-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 20px;
+      background: var(--card);
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+      box-shadow: 0 2px 6px -4px rgba(11,37,69,.15);
+    }
+    .qa-card::after {
+      content: "→";
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.3rem;
+      color: var(--teal);
+      transition: transform .18s ease;
+      font-weight: 800;
+    }
+    .qa-card:hover {
+      border-color: var(--teal);
+      box-shadow: 0 12px 28px -14px rgba(15,166,138,.6);
+      transform: translateY(-2px);
+    }
+    .qa-card:hover::after {
+      transform: translateY(-50%) translateX(4px);
+    }
+    .qa-card:active {
+      transform: translateY(0);
+    }
+    .qa-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 1.4rem;
+      flex-shrink: 0;
+      background: rgba(15,166,138,.12);
+      color: var(--teal2);
+    }
+    .qa-icon.blue { background: rgba(22,100,176,.12); color: #1664B0; }
+    .qa-icon.amber { background: rgba(183,110,0,.12); color: #B76E00; }
+    .qa-body { flex: 1; min-width: 0; padding-right: 24px; }
+    .qa-body b {
+      display: block;
+      font-size: .95rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+      color: var(--ink);
+    }
+    .qa-body span {
+      display: block;
+      font-size: .78rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .kpi-alert {
+      color: var(--warn, #B76E00);
+    }
+    .kpi-good {
+      color: var(--ok, #14803C);
+    }
+  </style>
+
   <h1>Good morning</h1>
   <p class="sub">Receptionist · register patients and collect the Ksh 200 fee.</p>
 
   <div class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
     <div class="card kpi">
-      <small style="display:block;color:var(--muted);font-size:.74rem">Register today</small>
-      <b style="font-size:1.5rem;color:var(--navy)">—</b>
+      <small style="display:block;color:var(--muted);font-size:.74rem">Awaiting registration</small>
+      <b style="font-size:1.5rem;{% if notifications.pending > 0 %}color:var(--warn, #B76E00){% else %}color:var(--navy){% endif %}">
+        {{ notifications.pending|default:0 }}
+      </b>
     </div>
     <div class="card kpi">
-      <small style="display:block;color:var(--muted);font-size:.74rem">Fees collected</small>
-      <b style="font-size:1.5rem;color:var(--navy)">Ksh 0</b>
+      <small style="display:block;color:var(--muted);font-size:.74rem">Fees collected today</small>
+      <b style="font-size:1.5rem;color:var(--navy)">Ksh —</b>
     </div>
     <div class="card kpi">
-      <small style="display:block;color:var(--muted);font-size:.74rem">Awaiting verify</small>
+      <small style="display:block;color:var(--muted);font-size:.74rem">Awaiting SHA verify</small>
       <b style="font-size:1.5rem;color:var(--navy)">0</b>
     </div>
     <div class="card kpi">
@@ -25,30 +107,33 @@
   </div>
 
   <div class="card">
-    <h2>Quick actions</h2>
+    <h2 style="margin:0 0 4px">Quick actions</h2>
+    <p class="sub" style="margin:0 0 4px">Tap a card to open it.</p>
 
-    <a class="row click" href="{% url 'patients:register' %}" style="text-decoration:none;color:inherit">
-      <div class="l">
-        <b>➕ Register a new patient</b>
-        <span>Collect Ksh 200 · assign queue number</span>
-      </div>
-      →
-    </a>
+    <div class="qa-grid">
+      <a href="{% url 'patients:register' %}" class="qa-card">
+        <div class="qa-icon">➕</div>
+        <div class="qa-body">
+          <b>Register a new patient</b>
+          <span>Collect Ksh 200 · assign queue number</span>
+        </div>
+      </a>
 
-    <a class="row click" href="{% url 'patients:list' %}" style="text-decoration:none;color:inherit">
-      <div class="l">
-        <b>👥 Patients</b>
-        <span>Search &amp; view all registered patients</span>
-      </div>
-      →
-    </a>
+      <a href="{% url 'patients:list' %}" class="qa-card">
+        <div class="qa-icon blue">👥</div>
+        <div class="qa-body">
+          <b>Patients</b>
+          <span>Search &amp; view all registered patients</span>
+        </div>
+      </a>
 
-    <a class="row click" href="/queue/" style="text-decoration:none;color:inherit">
-      <div class="l">
-        <b>🧭 View queue</b>
-        <span>See who is waiting for triage / doctor</span>
-      </div>
-      →
-    </a>
+      <a href="{% url 'clinical:queue' %}" class="qa-card">
+        <div class="qa-icon amber">🧭</div>
+        <div class="qa-body">
+          <b>View queue</b>
+          <span>See who is waiting for triage / doctor</span>
+        </div>
+      </a>
+    </div>
   </div>
 {% endblock %}

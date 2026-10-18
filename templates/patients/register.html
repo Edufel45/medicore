@@ -2,120 +2,507 @@
 {% block title %}Register patient — MediCore{% endblock %}
 
 {% block content %}
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-
-  <h1>Register a new patient</h1>
-  <p class="sub">Collect the Ksh 200 registration fee. SHA is verified live.</p>
-
-  <form method="post" class="card" style="max-width:640px">
-    {% csrf_token %}
-
-    {% if form.non_field_errors %}
-      <div class="al r" style="margin-bottom:12px">{{ form.non_field_errors.0 }}</div>
-    {% endif %}
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <div style="grid-column:1 / -1">
-        <label for="{{ form.full_name.id_for_label }}">Full name</label>
-        {{ form.full_name }}
-        {% if form.full_name.errors %}<div class="al r" style="margin-top:6px">{{ form.full_name.errors.0 }}</div>{% endif %}
-      </div>
-
-      <div>
-        <label for="{{ form.national_id.id_for_label }}">National ID</label>
-        {{ form.national_id }}
-        {% if form.national_id.errors %}<div class="al r" style="margin-top:6px">{{ form.national_id.errors.0 }}</div>{% endif %}
-      </div>
-
-      <div>
-        <label for="{{ form.phone.id_for_label }}">Phone (M-Pesa)</label>
-        {{ form.phone }}
-        {% if form.phone.errors %}<div class="al r" style="margin-top:6px">{{ form.phone.errors.0 }}</div>{% endif %}
-      </div>
-
-      <div>
-        <label for="{{ form.sex.id_for_label }}">Sex</label>
-        {{ form.sex }}
-      </div>
-
-      <div>
-        <label for="{{ form.date_of_birth.id_for_label }}">Date of birth (preferred)</label>
-        {{ form.date_of_birth }}
-      </div>
-
-      <div>
-        <label for="{{ form.age_years.id_for_label }}">Age (years) — if DOB unknown</label>
-        {{ form.age_years }}
-      </div>
-
-      <div>
-        <label for="{{ form.sha_number.id_for_label }}">SHA number</label>
-        <input type="text"
-               name="{{ form.sha_number.name }}"
-               id="{{ form.sha_number.id_for_label }}"
-               value="{{ form.sha_number.value|default:'' }}"
-               placeholder="Try DEMO-1001, DEMO-2002, DEMO-3003"
-               autocomplete="off"
-               class="form-input"
-               hx-post="{% url 'patients:sha_verify' %}"
-               hx-trigger="keyup changed delay:400ms"
-               hx-target="#sha-result"
-               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-        {% if form.sha_number.errors %}<div class="al r" style="margin-top:6px">{{ form.sha_number.errors.0 }}</div>{% endif %}
-        <div id="sha-result"></div>
-      </div>
-
-      <div style="grid-column:1 / -1">
-        <label for="{{ form.reason_for_visit.id_for_label }}">Reason for visit</label>
-        {{ form.reason_for_visit }}
-      </div>
-
-      <div style="grid-column:1 / -1;margin-top:6px">
-        <label style="display:flex;align-items:center;gap:8px;font-weight:600">
-          {{ visit_form.collect_registration_fee }}
-          Collect Ksh 200 registration fee now (M-Pesa)
-        </label>
-      </div>
-    </div>
-
-    {% if form.errors or visit_form.errors %}
-      <div class="al r" style="margin-top:12px">
-        Please fix the errors above before saving.
-      </div>
-    {% endif %}
-
-    <div style="display:flex;gap:10px;margin-top:20px">
-      <button type="submit"
-              style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:12px 22px;font-weight:700;cursor:pointer">
-        Save &amp; assign queue number →
-      </button>
-      <a href="{% url 'accounts:home' %}"
-         style="background:var(--card);color:var(--blue);border:1.5px solid var(--line);border-radius:10px;padding:12px 22px;font-weight:700;text-decoration:none;display:inline-block">
-        Cancel
-      </a>
-    </div>
-  </form>
-
   <style>
-    input[type="text"], input[type="number"], input[type="date"], select, textarea {
-      width: 100%;
-      padding: 10px 12px;
+    .reg-wrap { max-width: 1180px; margin: 0 auto; }
+    .reg-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+    }
+    .reg-header h1 { margin: 0 0 4px; }
+    .reg-header .sub { margin: 0; }
+    .reg-back {
+      background: var(--card); color: var(--blue);
+      border: 1.5px solid var(--line); border-radius: 10px;
+      padding: 9px 18px; font-weight: 700; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px; font-size: .9rem;
+    }
+    .reg-back:hover { background: var(--soft); }
+
+    .reg-card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 28px;
+      box-shadow: 0 20px 50px -30px rgba(11,37,69,.3);
+    }
+
+    .reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    @media (max-width: 900px) {
+      .reg-grid { grid-template-columns: 1fr; gap: 18px; }
+      .reg-card { padding: 18px; }
+    }
+
+    .reg-section { margin-bottom: 18px; }
+    .reg-section-title {
+      font-size: .72rem; text-transform: uppercase; letter-spacing: .8px;
+      font-weight: 800; color: var(--teal2); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .reg-section-title::after {
+      content: ""; flex: 1; height: 1px; background: var(--line);
+    }
+
+    .reg-field { margin-bottom: 14px; }
+    .reg-field label {
+      display: block; font-size: .74rem; font-weight: 700;
+      color: var(--muted); margin: 0 0 6px;
+      text-transform: uppercase; letter-spacing: .3px;
+    }
+    .reg-field input, .reg-field select, .reg-field textarea {
+      width: 100%; padding: 12px 14px;
+      border: 1.5px solid var(--line); border-radius: 10px;
+      font: inherit; font-size: .95rem;
+      background: var(--card); color: var(--ink);
+      transition: border-color .15s;
+    }
+    .reg-field input:focus, .reg-field select:focus, .reg-field textarea:focus {
+      outline: 0; border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(15,166,138,.12);
+    }
+    .reg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* SHA OTP verification box */
+    .sha-box {
+      background: var(--soft);
       border: 1.5px solid var(--line);
-      border-radius: 10px;
-      font: inherit;
-      background: var(--card);
-      color: var(--ink);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: border-color .2s, background .2s;
     }
-    input:focus, select:focus, textarea:focus {
-      outline: 0;
+    .sha-box.verified-active {
       border-color: var(--teal);
+      background: rgba(15,166,138,.06);
     }
-    label {
-      display: block;
-      font-size: .72rem;
-      font-weight: 700;
-      color: var(--muted);
-      margin: 0 0 4px;
+    .sha-box.verified-inactive {
+      border-color: var(--bad, #C0392B);
+      background: rgba(192,57,43,.06);
     }
+    .sha-box.verified-pending {
+      border-color: var(--warn, #B76E00);
+      background: rgba(183,110,0,.06);
+    }
+
+    .sha-step {
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--line);
+    }
+    .sha-step:last-child { border: 0; }
+    .sha-step-label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: .74rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .4px; color: var(--muted); margin-bottom: 8px;
+    }
+    .sha-step-label .num {
+      display: inline-grid; place-items: center;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--teal); color: #fff;
+      font-size: .7rem; font-weight: 800;
+    }
+    .sha-step.completed .sha-step-label { color: var(--teal2); }
+    .sha-step.completed .sha-step-label .num { background: var(--teal2); }
+
+    .sha-input-row {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .sha-input-row input {
+      flex: 1; text-transform: uppercase;
+      letter-spacing: 1px; font-family: ui-monospace, monospace; font-weight: 700;
+    }
+    .sha-btn {
+      border: 0; border-radius: 10px;
+      padding: 12px 20px; font-weight: 700; cursor: pointer;
+      white-space: nowrap; transition: background .15s, opacity .15s;
+    }
+    .sha-btn.primary {
+      background: var(--navy); color: #fff;
+    }
+    .sha-btn.primary:hover { background: var(--teal); }
+    .sha-btn.success {
+      background: var(--teal); color: #fff;
+    }
+    .sha-btn.success:hover { background: var(--teal2); }
+    .sha-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .sha-status {
+      margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+      font-size: .85rem; font-weight: 700; display: none;
+    }
+    .sha-status.show { display: block; }
+    .sha-status.info   { background: #e2eefc; color: #0b4a8f; }
+    .sha-status.ok     { background: #dcf2e3; color: #0d5a27; }
+    .sha-status.bad    { background: #fde4e1; color: #8f2a1e; }
+    .sha-status.warn   { background: #fff0d1; color: #7a4a00; }
+
+    .otp-dev-hint {
+      background: #fff8e1;
+      border: 1px dashed #e0a21b;
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      font-size: .78rem;
+      color: #7a4a00;
+      font-family: ui-monospace, monospace;
+    }
+    .otp-dev-hint b {
+      background: #e0a21b; color: #fff;
+      padding: 2px 8px; border-radius: 4px;
+      margin-left: 6px; letter-spacing: 2px;
+    }
+
+    .otp-input {
+      letter-spacing: 6px; text-align: center;
+      font-size: 1.4rem; font-family: ui-monospace, monospace;
+      font-weight: 800;
+    }
+
+    .sha-required-warning {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 10px;
+      background: #fff6f5; border: 1px solid rgba(192,57,43,.3);
+      color: #8f2a1e; font-size: .82rem; font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .sha-required-warning.hidden { display: none; }
+
+    .reg-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; margin-top: 24px; padding-top: 20px;
+      border-top: 1px solid var(--line); flex-wrap: wrap;
+    }
+    .reg-footer .summary { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .reg-footer .summary b { color: var(--ink); }
+    .reg-submit {
+      background: var(--teal); color: #fff; border: 0;
+      border-radius: 12px; padding: 14px 28px;
+      font-weight: 800; font-size: 1rem; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 10px;
+      transition: background .15s, transform .1s;
+      box-shadow: 0 10px 24px -10px rgba(15,166,138,.7);
+    }
+    .reg-submit:hover:not(:disabled) { background: var(--teal2); transform: translateY(-1px); }
+    .reg-submit:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
   </style>
+
+  <div class="reg-wrap">
+    <div class="reg-header">
+      <div>
+        <h1>Register a new patient</h1>
+        <p class="sub">Fill in details, then verify SHA via OTP before proceeding.</p>
+      </div>
+      <a href="{% url 'accounts:home' %}" class="reg-back">← Cancel</a>
+    </div>
+
+    <form method="post" class="reg-card" id="regForm">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="sha-required-warning">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+
+      <div class="reg-grid">
+
+        <!-- LEFT COLUMN -->
+        <div>
+          <div class="reg-section">
+            <div class="reg-section-title">👤 Patient identity</div>
+
+            <div class="reg-field">
+              <label for="{{ form.full_name.id_for_label }}">Full name</label>
+              {{ form.full_name }}
+              {% if form.full_name.errors %}<div class="sha-required-warning">{{ form.full_name.errors.0 }}</div>{% endif %}
+            </div>
+
+            <div class="reg-row">
+              <div class="reg-field">
+                <label for="{{ form.national_id.id_for_label }}">National ID</label>
+                {{ form.national_id }}
+                {% if form.national_id.errors %}<div class="sha-required-warning">{{ form.national_id.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="reg-field">
+                <label for="{{ form.phone.id_for_label }}">Phone (M-Pesa)</label>
+                {{ form.phone }}
+                {% if form.phone.errors %}<div class="sha-required-warning">{{ form.phone.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="reg-row">
+              <div class="reg-field">
+                <label for="{{ form.sex.id_for_label }}">Sex</label>
+                {{ form.sex }}
+              </div>
+              <div class="reg-field">
+                <label for="{{ form.age_years.id_for_label }}">Age (years)</label>
+                {{ form.age_years }}
+              </div>
+            </div>
+
+            <div class="reg-field">
+              <label for="{{ form.date_of_birth.id_for_label }}">Date of birth <span style="text-transform:none;color:var(--muted);font-weight:500">(optional)</span></label>
+              {{ form.date_of_birth }}
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div>
+          <div class="reg-section">
+            <div class="reg-section-title">🛡️ SHA verification <span style="color:var(--bad);font-size:.65rem;letter-spacing:0;margin-left:6px">REQUIRED</span></div>
+
+            <div class="sha-box" id="shaBox">
+
+              <!-- STEP 1: Send OTP -->
+              <div class="sha-step" id="shaStep1">
+                <div class="sha-step-label"><span class="num">1</span> Enter SHA number &amp; send code</div>
+                <div class="sha-input-row">
+                  <input type="text"
+                         name="{{ form.sha_number.name }}"
+                         id="{{ form.sha_number.id_for_label }}"
+                         value="{{ form.sha_number.value|default:'' }}"
+                         placeholder="Enter SHA number"
+                         autocomplete="off" required>
+                  <button type="button" class="sha-btn primary" id="sendOtpBtn" onclick="sendOtp()">
+                    📲 Send code
+                  </button>
+                </div>
+                <div class="sha-status" id="shaStatus1"></div>
+                <div class="otp-dev-hint" id="otpDevHint" style="display:none">
+                  🧪 <b>DEMO</b> — OTP would be sent to <span id="maskedPhone">—</span>. In dev, use: <b id="devOtp">—</b>
+                </div>
+              </div>
+
+              <!-- STEP 2: Verify OTP -->
+              <div class="sha-step" id="shaStep2" style="display:none">
+                <div class="sha-step-label"><span class="num">2</span> Enter the 6-digit code from the patient's phone</div>
+                <div class="sha-input-row">
+                  <input type="text"
+                         id="otpCode"
+                         class="otp-input"
+                         placeholder="000000"
+                         maxlength="6"
+                         inputmode="numeric"
+                         pattern="[0-9]{6}"
+                         autocomplete="one-time-code">
+                  <button type="button" class="sha-btn success" id="confirmOtpBtn" onclick="confirmOtp()">
+                    ✓ Confirm
+                  </button>
+                </div>
+                <div class="sha-status" id="shaStatus2"></div>
+              </div>
+
+            </div>
+
+            <div class="sha-required-warning" id="shaWarning">
+              ⚠️ You must verify the SHA number before creating the patient.
+            </div>
+          </div>
+
+          <div class="reg-section">
+            <div class="reg-section-title">📋 Visit details</div>
+
+            <div class="reg-field">
+              <label for="{{ form.reason_for_visit.id_for_label }}">Reason for visit</label>
+              {{ form.reason_for_visit }}
+            </div>
+
+            <div class="reg-field" style="display:flex;align-items:center;gap:10px;margin-top:12px">
+              {{ visit_form.collect_registration_fee }}
+              <label for="{{ visit_form.collect_registration_fee.id_for_label }}"
+                     style="margin:0;text-transform:none;font-size:.9rem;font-weight:600;color:var(--ink)">
+                Collect Ksh 200 registration fee via M-Pesa
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reg-footer">
+        <div class="summary">
+          <b>Registration fee:</b> Ksh 200<br>
+          A slip will be issued automatically after registration.
+        </div>
+        <button type="submit" class="reg-submit" id="submitBtn" disabled>
+          ✅ Complete registration →
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <script>
+    const shaBox        = document.getElementById("shaBox");
+    const shaInput      = document.getElementById("{{ form.sha_number.id_for_label }}");
+    const phoneInput    = document.getElementById("{{ form.phone.id_for_label }}");
+    const sendOtpBtn    = document.getElementById("sendOtpBtn");
+    const confirmOtpBtn = document.getElementById("confirmOtpBtn");
+    const shaStep1      = document.getElementById("shaStep1");
+    const shaStep2      = document.getElementById("shaStep2");
+    const shaStatus1    = document.getElementById("shaStatus1");
+    const shaStatus2    = document.getElementById("shaStatus2");
+    const otpDevHint    = document.getElementById("otpDevHint");
+    const maskedPhone   = document.getElementById("maskedPhone");
+    const devOtp        = document.getElementById("devOtp");
+    const otpCode       = document.getElementById("otpCode");
+    const shaWarning    = document.getElementById("shaWarning");
+    const submitBtn     = document.getElementById("submitBtn");
+
+    let verificationId = null;
+    let shaVerified = false;
+
+    function setStatus(el, cls, text) {
+      el.className = "sha-status show " + cls;
+      el.textContent = text;
+    }
+    function clearStatus(el) {
+      el.className = "sha-status";
+      el.textContent = "";
+    }
+
+    function resetVerification() {
+      verificationId = null;
+      shaVerified = false;
+      shaBox.className = "sha-box";
+      shaStep2.style.display = "none";
+      otpDevHint.style.display = "none";
+      otpCode.value = "";
+      clearStatus(shaStatus1);
+      clearStatus(shaStatus2);
+      shaWarning.classList.remove("hidden");
+      submitBtn.disabled = true;
+    }
+
+    // Any change to SHA or phone resets the flow
+    shaInput.addEventListener("input", resetVerification);
+    phoneInput.addEventListener("input", resetVerification);
+
+    // Allow only digits in OTP
+    otpCode.addEventListener("input", function () {
+      this.value = this.value.replace(/\D/g, "").slice(0, 6);
+    });
+
+    // Enter key in OTP triggers confirm
+    otpCode.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmOtp();
+      }
+    });
+
+    async function sendOtp() {
+      const sha = shaInput.value.trim().toUpperCase();
+      const phone = phoneInput.value.trim();
+
+      if (!sha) {
+        setStatus(shaStatus1, "bad", "Enter the SHA number first.");
+        return;
+      }
+      if (!phone) {
+        setStatus(shaStatus1, "bad", "Enter the patient's phone number first.");
+        phoneInput.focus();
+        return;
+      }
+
+      sendOtpBtn.disabled = true;
+      sendOtpBtn.textContent = "Sending…";
+      setStatus(shaStatus1, "info", "Contacting SHA…");
+
+      try {
+        const res = await fetch("/sha/send-otp/", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ sha_number: sha, phone: phone }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Could not send code");
+        }
+
+        verificationId = data.verification_id;
+        maskedPhone.textContent = data.masked_phone || phone;
+        devOtp.textContent = data.dev_otp || "—";
+        otpDevHint.style.display = "block";
+
+        setStatus(shaStatus1, "ok", `✓ Code sent to ${data.masked_phone || phone}. Ask the patient for the 6-digit code.`);
+        shaStep2.style.display = "block";
+        otpCode.focus();
+
+      } catch (err) {
+        setStatus(shaStatus1, "bad", "✗ " + err.message);
+      } finally {
+        sendOtpBtn.disabled = false;
+        sendOtpBtn.textContent = "📲 Send code";
+      }
+    }
+
+    async function confirmOtp() {
+      const code = otpCode.value.trim();
+
+      if (!verificationId) {
+        setStatus(shaStatus2, "bad", "Send a code first.");
+        return;
+      }
+      if (code.length !== 6) {
+        setStatus(shaStatus2, "bad", "Enter the 6-digit code.");
+        return;
+      }
+
+      confirmOtpBtn.disabled = true;
+      confirmOtpBtn.textContent = "Verifying…";
+      setStatus(shaStatus2, "info", "Verifying code…");
+
+      try {
+        const res = await fetch("/sha/confirm-otp/", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ verification_id: verificationId, otp_code: code }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Incorrect code");
+        }
+
+        const status = data.status;
+        shaVerified = true;
+        shaBox.className = "sha-box verified-" + status;
+        shaStep2.querySelector(".sha-step-label").parentElement.classList.add("completed");
+
+        const labels = {
+          active:   { text: "✓ SHA Active — eligible for coverage", cls: "ok" },
+          inactive: { text: "✗ SHA Inactive — patient will pay by M-Pesa", cls: "warn" },
+          pending:  { text: "⏳ SHA Pending — will be re-checked at billing", cls: "warn" },
+          unknown:  { text: "? SHA status unknown — proceed with caution", cls: "info" },
+        };
+        const info = labels[status] || labels.unknown;
+        setStatus(shaStatus2, info.cls, info.text);
+
+        shaWarning.classList.add("hidden");
+        submitBtn.disabled = false;
+
+      } catch (err) {
+        setStatus(shaStatus2, "bad", "✗ " + err.message);
+        shaVerified = false;
+        submitBtn.disabled = true;
+      } finally {
+        confirmOtpBtn.disabled = false;
+        confirmOtpBtn.textContent = "✓ Confirm";
+      }
+    }
+
+    // Guard: block form submit if SHA was not verified
+    document.getElementById("regForm").addEventListener("submit", function (e) {
+      if (!shaVerified) {
+        e.preventDefault();
+        setStatus(shaStatus1, "bad", "Verify SHA first.");
+        shaWarning.classList.remove("hidden");
+      }
+    });
+  </script>
 {% endblock %}

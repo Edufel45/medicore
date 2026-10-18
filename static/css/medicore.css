@@ -130,4 +130,216 @@ h2 { font-size: 1.02rem; margin: 0 0 10px; color: var(--navy); }
 }
 .themeBtn:hover {
   background: var(--line);
+} /* ============================================================
+   Enhanced FAB (Floating Action Button) — New Patient
+   ============================================================ */
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  background: linear-gradient(135deg, #0FA68A 0%, #0b8a73 100%);
+  color: #fff;
+  border: 0;
+  border-radius: 60px;
+  padding: 16px 28px;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: .3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow:
+    0 16px 32px -12px rgba(15,166,138,.85),
+    0 4px 12px -4px rgba(0,0,0,.15);
+  z-index: 15;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  animation: fabPulse 3s ease-in-out infinite;
+}
+
+.fab:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 20px 40px -12px rgba(15,166,138,.95),
+    0 8px 16px -4px rgba(0,0,0,.2);
+}
+
+.fab:active {
+  transform: translateY(0) scale(.98);
+}
+
+.fab::before {
+  content: "＋";
+  font-size: 1.4rem;
+  font-weight: 900;
+  margin-right: -4px;
+}
+
+@keyframes fabPulse {
+  0%, 100% {
+    box-shadow:
+      0 16px 32px -12px rgba(15,166,138,.85),
+      0 0 0 0 rgba(15,166,138,.5);
+  }
+  50% {
+    box-shadow:
+      0 16px 32px -12px rgba(15,166,138,.85),
+      0 0 0 14px rgba(15,166,138,0);
+  }
+}
+
+@media (max-width: 900px) {
+  .fab {
+    right: 14px;
+    bottom: 76px;
+    padding: 14px 22px;
+    font-size: .92rem;
+  }
+}/* ============================================================
+   Notifications — bell + dropdown
+   ============================================================ */
+.notif-wrap {
+  position: relative;
+}
+
+.bell {
+  border: 0;
+  background: var(--soft);
+  color: var(--ink);
+  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  position: relative;
+  cursor: pointer;
+  font-size: 1.05rem;
+  transition: background .15s;
+}
+.bell:hover { background: var(--line); }
+
+.notif-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--bad, #C0392B);
+  color: #fff;
+  border-radius: 99px;
+  padding: 0 6px;
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 18px;
+  min-width: 18px;
+  height: 18px;
+  text-align: center;
+  border: 2px solid var(--topbar);
+  box-shadow: 0 2px 6px -2px rgba(192,57,43,.6);
+  animation: notifPulse 2s ease-in-out infinite;
+}
+
+@keyframes notifPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px -16px rgba(11,37,69,.35);
+  min-width: 320px;
+  max-width: 380px;
+  max-height: 480px;
+  overflow-y: auto;
+  z-index: 30;
+  display: none;
+  animation: notifFadeIn .15s ease;
+}
+
+.notif-dropdown.open {
+  display: block;
+}
+
+@keyframes notifFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.notif-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .85rem;
+}
+
+.notif-count-badge {
+  background: var(--bad, #C0392B);
+  color: #fff;
+  border-radius: 99px;
+  padding: 2px 10px;
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.notif-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid var(--line);
+  transition: background .15s;
+}
+
+.notif-item:last-child { border: 0; }
+.notif-item:hover { background: var(--soft); }
+
+.notif-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.notif-text {
+  flex: 1;
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+.notif-arrow {
+  color: var(--muted);
+  font-weight: 800;
+  transition: transform .15s;
+}
+.notif-item:hover .notif-arrow {
+  transform: translateX(3px);
+  color: var(--teal);
+}
+
+.notif-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: .85rem;
+}
+
+/* Mobile — dropdown full width */
+@media (max-width: 640px) {
+  .notif-dropdown {
+    position: fixed;
+    top: auto;
+    right: 8px;
+    left: 8px;
+    bottom: 76px;
+    min-width: auto;
+    max-width: none;
+  }
 }

@@ -1,7 +1,7 @@
 """
 MediCore — Patients Views
 ============================================================
-Registration + list + HTMX SHA verify.
+Registration, list, HTMX SHA verify, patient slip.
 """
 
 from decimal import Decimal
@@ -11,10 +11,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
-from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_POST
 
 from apps.accounts.decorators import role_required
 from apps.accounts.models import AuditLog
@@ -103,7 +102,9 @@ def register(request):
                 f"Registered {patient.sid} · {patient.full_name}. "
                 f"Queue {visit.queue_number}. {sha_msg}"
             )
-            return redirect("accounts:home")
+            # Redirect to the printable patient slip
+            return redirect("patients:slip", queue_number=visit.queue_number)
+
         else:
             messages.error(request, "Please fix the errors below.")
     else:
@@ -122,11 +123,15 @@ def register(request):
 @login_required
 @role_required("reception", "nurse", "doctor", "lab", "pharmacy", "accounts", "admin")
 def patient_list(request):
-    """Searchable list of patients. Anyone with a role can look up."""
+    """Searchable list of patients."""
     q = (request.GET.get("q") or "").strip()
     scope = (request.GET.get("scope") or "active").strip()
 
-    qs = Patient.objects.all().order_by("-created_at")
+    qs = (
+        Patient.objects
+        .prefetch_related("visits")
+        .order_by("-created_at")
+    )
 
     if scope == "active":
         qs = qs.filter(is_active=True)
@@ -156,10 +161,7 @@ def patient_list(request):
 @login_required
 @require_POST
 def sha_verify_ajax(request):
-    """
-    POST /patients/sha-verify/  { sha_number: "DEMO-1001" }
-    Returns a small HTML fragment for the HTMX target.
-    """
+    """POST /patients/sha-verify/ — returns a small HTML fragment."""
     sha_number = (request.POST.get("sha_number") or "").strip().upper()
 
     if not sha_number:
@@ -172,4 +174,28 @@ def sha_verify_ajax(request):
 
     return render(request, "patients/partials/sha_result.html", {
         "result": result,
+    })
+
+
+# ------------------------------------------------------------
+# Patient slip — printable A5 receipt for the doctor
+# ------------------------------------------------------------
+@login_required
+@role_required("reception", "admin", "doctor", "nurse")
+def patient_slip(request, queue_number):
+    """
+    /patients/slip/<queue_number>/ — printable A5 slip.
+
+    The receptionist prints this after registration and gives it
+    to the patient. They carry it to the doctor, who uses the
+    System ID to look them up.
+    """
+    visit = get_object_or_404(
+        Visit.objects.select_related("patient"),
+        queue_number=queue_number,
+    )
+    return render(request, "patients/slip.html", {
+        "visit": visit,
+        "patient": visit.patient,
+        "now": timezone.now(),
     })

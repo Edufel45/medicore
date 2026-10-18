@@ -22,7 +22,8 @@ class MediCoreLoginView(LoginView):
 def home(request):
     """
     Role-aware home.
-    Picks a role-specific template if it exists; falls back to home.html.
+    - Doctor goes straight to the key-in lookup.
+    - Everyone else uses their role dashboard.
     """
     role = None
     try:
@@ -30,10 +31,13 @@ def home(request):
     except Exception:
         role = None
 
+    # Doctors land on the lookup page
+    if role == "doctor":
+        return redirect("clinical:doctor_lookup")
+
     template_map = {
         "reception": "accounts/home_reception.html",
         "nurse":     "accounts/home_nurse.html",
-        "doctor":    "accounts/home_doctor.html",
         "lab":       "accounts/home_lab.html",
         "pharmacy":  "accounts/home_pharmacy.html",
         "accounts":  "accounts/home_accounts.html",

@@ -2,14 +2,9 @@
 MediCore — Accounts Context Processors
 ============================================================
 Injects global template context so every rendered page has:
-
-  - current_role        (string: "reception" | "nurse" | "doctor" | ...)
-  - current_role_title  (human-readable: "Receptionist", "Doctor", ...)
-  - current_role_color  (hex color for the rail tint)
-  - nav_items           (list of {key, label, icon} for the rail)
-  - user_theme          (string: "light" | "dark")
-
-This keeps base.html and the rail template free of hard-coded role logic.
+  - current_role, current_role_title, current_role_color
+  - nav_items, user_theme
+  - notifications (per-role counts)
 
 Proposal reference: §2.3 "role-based access control for Admin, Doctor,
 Nurse, Pharmacist, Cashier, and SHA Clerk".
@@ -25,7 +20,6 @@ GROUP_TO_ROLE = {
     "Accountant": "accounts",
 }
 
-# Human-readable titles
 ROLE_TITLES = {
     "reception": "Receptionist",
     "nurse": "Nurse",
@@ -35,7 +29,6 @@ ROLE_TITLES = {
     "accounts": "Accountant",
 }
 
-# Role colors (matches the HTML prototype)
 ROLE_COLORS = {
     "reception": "#1664B0",
     "nurse": "#7c3aed",
@@ -45,9 +38,6 @@ ROLE_COLORS = {
     "accounts": "#64748b",
 }
 
-# Navigation items per role — mirrors the HTML prototype.
-# The `key` maps to a URL path via base.html's "href=/{{ item.key }}/".
-# Do NOT include a leading or trailing slash in the key.
 NAV_BY_ROLE = {
     "reception": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
@@ -60,10 +50,10 @@ NAV_BY_ROLE = {
         {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "doctor": [
-        {"key": "",           "label": "Home",      "icon": "🏠"},
-        {"key": "queue",      "label": "Queue",     "icon": "🧭"},
-        {"key": "lab/inbox",  "label": "Lab inbox", "icon": "📥"},
-        {"key": "patients",   "label": "Patients",  "icon": "👥"},
+        {"key": "doctor/lookup", "label": "Lookup",    "icon": "🔍"},
+        {"key": "queue",         "label": "Queue",     "icon": "🧭"},
+        {"key": "lab/inbox",     "label": "Lab inbox", "icon": "📥"},
+        {"key": "patients",      "label": "Patients",  "icon": "👥"},
     ],
     "lab": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
@@ -76,21 +66,18 @@ NAV_BY_ROLE = {
         {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "accounts": [
-        {"key": "",                  "label": "Home",     "icon": "🏠"},
-        {"key": "sha/claims",        "label": "Claims",   "icon": "📋"},
-        {"key": "billing/ledger",    "label": "Ledger",   "icon": "📒"},
-        {"key": "mpesa/transactions","label": "M-Pesa",   "icon": "📱"},
-        {"key": "audit",             "label": "Audit",    "icon": "🕵️"},
-        {"key": "patients",          "label": "Patients", "icon": "👥"},
+        {"key": "",                   "label": "Home",     "icon": "🏠"},
+        {"key": "sha/claims",         "label": "Claims",   "icon": "📋"},
+        {"key": "billing/ledger",     "label": "Ledger",   "icon": "📒"},
+        {"key": "mpesa/transactions", "label": "M-Pesa",   "icon": "📱"},
+        {"key": "audit",              "label": "Audit",    "icon": "🕵️"},
+        {"key": "patients",           "label": "Patients", "icon": "👥"},
     ],
 }
 
 
 def role_context(request):
-    """
-    Return template context for the current user.
-    Safe for anonymous users — returns empty/guest values.
-    """
+    """Injects role, nav, theme into every template."""
     ctx = {
         "current_role": None,
         "current_role_title": "",
@@ -99,12 +86,10 @@ def role_context(request):
         "user_theme": "light",
     }
 
-    # Get user
     user = getattr(request, "user", None)
     if user is None or not user.is_authenticated:
         return ctx
 
-    # Determine role from the user's first Django Group
     role_key = None
     try:
         group_names = list(user.groups.values_list("name", flat=True))
@@ -115,7 +100,6 @@ def role_context(request):
     except Exception:
         role_key = None
 
-    # Superuser without group -> treat as accountant (safe read-only view)
     if role_key is None and user.is_superuser:
         role_key = "accounts"
 
@@ -126,3 +110,155 @@ def role_context(request):
     ctx["user_theme"] = getattr(user, "theme_preference", None) or "light"
 
     return ctx
+
+
+def notification_counts(request):
+    """
+    Injects `notifications` into template context.
+
+    Wrapped in try/except so a bug in this processor NEVER takes
+    down the whole app. If anything fails, returns an empty
+    notification set and logs the error.
+    """
+    import logging
+
+    empty = {
+        "notifications": {
+            "pending": 0,
+            "lab_ready": 0,
+            "low_stock": 0,
+            "unpriced": 0,
+            "total": 0,
+            "items": [],
+        }
+    }
+
+    try:
+        from apps.clinical.models import Prescription, Visit
+        from apps.laboratory.models import LabTest
+        from apps.pharmacy.models import Drug
+
+        user = getattr(request, "user", None)
+        if user is None or not user.is_authenticated:
+            return empty
+
+        try:
+            profile = user.profile
+            role = profile.role if profile else None
+        except Exception:
+            role = None
+
+        if role is None:
+            return empty
+
+        pending = 0
+        lab_ready = 0
+        low_stock = 0
+        unpriced = 0
+        items = []
+
+        if role == "reception":
+            pending = Visit.objects.filter(stage="reg").count()
+            if pending:
+                items.append({
+                    "icon": "🖥️",
+                    "label": f"{pending} awaiting registration",
+                    "url": "/queue/",
+                })
+        elif role == "nurse":
+            pending = Visit.objects.filter(stage="nurse").count()
+            if pending:
+                items.append({
+                    "icon": "🩺",
+                    "label": f"{pending} awaiting vitals",
+                    "url": "/queue/",
+                })
+        elif role == "doctor":
+            pending = Visit.objects.filter(stage="doctor").count()
+            if pending:
+                items.append({
+                    "icon": "🧑‍⚕️",
+                    "label": f"{pending} awaiting consultation",
+                    "url": "/queue/",
+                })
+            lab_ready = (
+                Visit.objects
+                .filter(stage="doctor", lab_tests__status="released")
+                .distinct()
+                .count()
+            )
+            if lab_ready:
+                items.append({
+                    "icon": "📥",
+                    "label": f"{lab_ready} lab result{'s' if lab_ready != 1 else ''} ready",
+                    "url": "/lab/inbox/",
+                })
+        elif role == "lab":
+            pending = Visit.objects.filter(stage="lab").count()
+            if pending:
+                items.append({
+                    "icon": "🔬",
+                    "label": f"{pending} test{'s' if pending != 1 else ''} waiting",
+                    "url": "/queue/",
+                })
+        elif role == "pharmacy":
+            pending = Visit.objects.filter(stage="pharmacy").count()
+            if pending:
+                items.append({
+                    "icon": "💊",
+                    "label": f"{pending} prescription{'s' if pending != 1 else ''} to fill",
+                    "url": "/queue/",
+                })
+            low_drugs = [
+                d for d in Drug.objects.filter(is_active=True)
+                if d.total_stock <= d.reorder_level
+            ]
+            low_stock = len(low_drugs)
+            if low_stock:
+                items.append({
+                    "icon": "⚠️",
+                    "label": f"{low_stock} drug{'s' if low_stock != 1 else ''} low on stock",
+                    "url": "/queue/",
+                })
+            unpriced = (
+                Prescription.objects
+                .filter(visit__stage="pharmacy", drug__isnull=True)
+                .count()
+            )
+            if unpriced:
+                items.append({
+                    "icon": "💰",
+                    "label": f"{unpriced} unpriced drug{'s' if unpriced != 1 else ''}",
+                    "url": "/queue/",
+                })
+        elif role == "accounts":
+            from apps.sha.models import SHAClaim
+            pending_claims = SHAClaim.objects.filter(
+                status__in=["draft", "pending", "under_review"]
+            ).count()
+            if pending_claims:
+                items.append({
+                    "icon": "📋",
+                    "label": f"{pending_claims} claim{'s' if pending_claims != 1 else ''} pending",
+                    "url": "/sha/claims/",
+                })
+            pending = pending_claims
+
+        total = pending + lab_ready + unpriced
+
+        return {
+            "notifications": {
+                "pending": pending,
+                "lab_ready": lab_ready,
+                "low_stock": low_stock,
+                "unpriced": unpriced,
+                "total": total,
+                "items": items,
+            }
+        }
+
+    except Exception:
+        logging.getLogger("medicore").exception(
+            "notification_counts failed — returning empty"
+        )
+        return empty
