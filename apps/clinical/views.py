@@ -981,3 +981,136 @@ def api_lab_search(request):
         results = catalogue[:10]
 
     return JsonResponse({"results": results[:10]})
+
+
+# ------------------------------------------------------------
+# Lab — key-in lookup (paper slip workflow)
+# ------------------------------------------------------------
+@login_required
+@role_required("lab", "admin")
+def lab_lookup(request):
+    """
+    /lab/lookup/ — the lab technician's main workflow.
+
+    Accepts: System ID, queue number, or NID.
+    Only opens visits currently at the lab stage.
+    """
+    sid = (request.GET.get("sid") or "").strip().upper()
+    visit = None
+    lookup_error = ""
+    lookup_status = ""
+
+    if sid:
+        # 1. Try System ID
+        patient = Patient.objects.filter(sid__iexact=sid).first()
+        if patient:
+            visit = (
+                Visit.objects
+                .filter(patient=patient, stage="lab")
+                .select_related("patient")
+                .order_by("-started_at")
+                .first()
+            )
+            if not visit:
+                other = (
+                    Visit.objects
+                    .filter(patient=patient)
+                    .exclude(stage="done")
+                    .order_by("-started_at")
+                    .first()
+                )
+                if other:
+                    lookup_status = (
+                        f"Patient {patient.sid} is currently at "
+                        f"{other.get_stage_display()} — not yet at the lab."
+                    )
+                else:
+                    lookup_status = f"Patient {patient.sid} found but has no active visit."
+        else:
+            # 2. Try queue number
+            visit = (
+                Visit.objects
+                .filter(queue_number__iexact=sid, stage="lab")
+                .select_related("patient")
+                .first()
+            )
+            if not visit:
+                # 3. Try NID
+                patient = Patient.objects.filter(national_id=sid).first()
+                if patient:
+                    visit = (
+                        Visit.objects
+                        .filter(patient=patient, stage="lab")
+                        .select_related("patient")
+                        .order_by("-started_at")
+                        .first()
+                    )
+                    if not visit:
+                        lookup_status = f"Patient (NID {sid}) is not currently at the lab."
+                else:
+                    lookup_error = f'No patient found for "{sid}".'
+
+        if visit:
+            return redirect("clinical:visit_detail", queue_number=visit.queue_number)
+
+    recent = (
+        Visit.objects
+        .filter(stage="lab")
+        .select_related("patient")
+        .prefetch_related("lab_tests")
+        .order_by("-updated_at")[:5]
+    )
+
+    return render(request, "clinical/lab_lookup.html", {
+        "sid": sid,
+        "lookup_error": lookup_error,
+        "lookup_status": lookup_status,
+        "recent": recent,
+        "pending_count": Visit.objects.filter(stage="lab").count(),
+    })
+
+
+# ------------------------------------------------------------
+# Lab — stat counts for home dashboard
+# ------------------------------------------------------------
+@login_required
+@role_required("lab", "admin")
+def lab_stats(request):
+    """
+    /lab/stats/ — JSON with lab dashboard counts.
+    Used by home_lab.html to show live numbers.
+    """
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    in_lab = Visit.objects.filter(stage="lab").count()
+
+    pending = (
+        LabTest.objects
+        .filter(status__in=["ordered", "collected", "running", "ready"])
+        .count()
+    )
+
+    released_today = (
+        LabTest.objects
+        .filter(status="released", released_at__gte=today_start)
+        .count()
+    )
+
+    oldest_wait_min = 0
+    oldest = (
+        LabTest.objects
+        .filter(status__in=["ordered", "collected", "running", "ready"])
+        .order_by("ordered_at")
+        .values_list("ordered_at", flat=True)
+        .first()
+    )
+    if oldest:
+        delta = timezone.now() - oldest
+        oldest_wait_min = max(0, int(delta.total_seconds() // 60))
+
+    return JsonResponse({
+        "in_lab": in_lab,
+        "pending": pending,
+        "released_today": released_today,
+        "oldest_wait_min": oldest_wait_min,
+    })

@@ -2,21 +2,117 @@
 {% block title %}Lab — MediCore{% endblock %}
 
 {% block content %}
-  <h1>Good morning</h1>
-  <p class="sub">Lab technician · run tests and release results back to the doctor.</p>
+  <style>
+    .lab-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+    @media (max-width: 900px) { .lab-kpis { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .lab-kpis { grid-template-columns: 1fr; } }
+    .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
+    .kpi::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #6366f1; opacity: .9; }
+    .kpi.kpi-ok::after { background: #16a34a; }
+    .kpi.kpi-muted::after { background: #64748b; }
+    .kpi small { display: block; color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; margin-bottom: 4px; }
+    .kpi b { font-size: 1.8rem; color: #4f46e5; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .kpi .unit { font-size: .9rem; font-weight: 600; color: var(--muted); margin-left: 4px; }
+    .kpi .flash.bump { color: #16a34a; }
+    .actions { display: flex; flex-direction: column; gap: 8px; }
+    .action-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--soft); border: 1px solid var(--line); border-left: 3px solid #6366f1; border-radius: 12px; text-decoration: none; color: inherit; transition: border-color .15s, background .15s, transform .1s; }
+    .action-row:hover { border-color: #6366f1; background: rgba(99,102,241,.06); transform: translateX(2px); }
+    .action-row .ico { width: 40px; height: 40px; border-radius: 10px; background: rgba(99,102,241,.14); display: grid; place-items: center; font-size: 1.15rem; flex-shrink: 0; }
+    .action-row .lbl { flex: 1; }
+    .action-row .lbl b { display: block; font-size: .95rem; margin-bottom: 2px; }
+    .action-row .lbl span { color: var(--muted); font-size: .82rem; }
+    .action-row .arrow { color: var(--muted); font-size: 1.1rem; }
+    .stale { font-size: .72rem; color: var(--muted); text-align: right; margin-top: 8px; }
+    .stale.err { color: #b91c1c; }
+  </style>
 
-  <div class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">In lab</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Pending results</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Released today</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Oldest wait</small><b style="font-size:1.5rem;color:var(--navy)">— min</b></div>
-  </div>
+  <h1>Good morning, lab</h1>
+  <p class="sub">Run tests and release results back to the doctor.</p>
 
-  <div class="card">
-    <h2>Quick actions</h2>
-    <div class="row click" onclick="alert('Lab queue — Phase 5')">
-      <div class="l"><b>🧭 Open lab queue</b><span>Tests waiting for results</span></div>
-      →
+  <div class="lab-kpis">
+    <div class="kpi">
+      <small>In lab</small>
+      <b><span class="flash" data-k="in_lab">–</span></b>
+    </div>
+    <div class="kpi">
+      <small>Pending results</small>
+      <b><span class="flash" data-k="pending">–</span></b>
+    </div>
+    <div class="kpi kpi-ok">
+      <small>Released today</small>
+      <b><span class="flash" data-k="released_today">–</span></b>
+    </div>
+    <div class="kpi kpi-muted">
+      <small>Oldest wait</small>
+      <b><span class="flash" data-k="oldest_wait_min">–</span><span class="unit">min</span></b>
     </div>
   </div>
+  <div class="stale" id="stale">waiting for first refresh…</div>
+
+  <div class="card" style="margin-top:20px">
+    <h2>Quick actions</h2>
+    <div class="actions">
+      <a class="action-row" href="{% url 'clinical:lab_lookup' %}">
+        <div class="ico">🧪</div>
+        <div class="lbl">
+          <b>Open lab lookup</b>
+          <span>Search patient by SID, queue number, or NID</span>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+      <a class="action-row" href="{% url 'clinical:queue' %}">
+        <div class="ico">🗂</div>
+        <div class="lbl">
+          <b>Lab queue</b>
+          <span>Patients waiting for lab results</span>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const URL = "{% url 'clinical:lab_stats' %}";
+      const REFRESH_MS = 15000;
+      const stale = document.getElementById("stale");
+      const lastValues = {};
+
+      function setVal(key, val) {
+        const el = document.querySelector('[data-k="' + key + '"]');
+        if (!el) return;
+        const next = (val === null || val === undefined) ? "–" : String(val);
+        if (lastValues[key] !== next) {
+          el.textContent = next;
+          el.classList.add("bump");
+          setTimeout(() => el.classList.remove("bump"), 400);
+          lastValues[key] = next;
+        }
+      }
+
+      function stamp() {
+        return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      async function refresh() {
+        try {
+          const r = await fetch(URL, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const data = await r.json();
+          setVal("in_lab", data.in_lab);
+          setVal("pending", data.pending);
+          setVal("released_today", data.released_today);
+          setVal("oldest_wait_min", data.oldest_wait_min);
+          stale.classList.remove("err");
+          stale.textContent = "updated " + stamp() + " · auto-refresh every 15s";
+        } catch (err) {
+          stale.classList.add("err");
+          stale.textContent = "update failed (" + err.message + ") — retrying…";
+        }
+      }
+
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    })();
+  </script>
 {% endblock %}

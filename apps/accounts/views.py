@@ -23,6 +23,8 @@ def home(request):
     """
     Role-aware home.
     - Doctor goes straight to the key-in lookup.
+    - Nurse goes straight to their lookup / vitals station.
+    - Lab technician goes straight to their lookup station.
     - Everyone else uses their role dashboard.
     """
     role = None
@@ -34,6 +36,14 @@ def home(request):
     # Doctors land on the lookup page
     if role == "doctor":
         return redirect("clinical:doctor_lookup")
+
+    # Nurses land on their lookup / vitals station
+    if role == "nurse":
+        return redirect("clinical:nurse_lookup")
+
+    # Lab technicians land on their lookup station
+    if role == "lab":
+        return redirect("clinical:lab_lookup")
 
     template_map = {
         "reception": "accounts/home_reception.html",

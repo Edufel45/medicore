@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Nurse station — MediCore{% endblock %}
+
+{% block content %}
+  <style>
+    .lookup-wrap { max-width: 720px; margin: 20px auto 0; }
+    .lookup-header { text-align: center; margin-bottom: 22px; }
+    .lookup-header h1 { font-size: 1.8rem; margin: 0 0 6px; }
+    .lookup-header p { margin: 0; color: var(--muted); font-size: .95rem; }
+    .lookup-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: 0 20px 50px -30px rgba(11,37,69,.3); }
+    .lookup-input-wrap { position: relative; }
+    .lookup-input-wrap .icon { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-size: 1.4rem; color: var(--muted); pointer-events: none; }
+    .lookup-input { width: 100%; padding: 20px 20px 20px 64px; font-size: 1.3rem; font-family: ui-monospace, "Courier New", monospace; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: 2px solid var(--line); border-radius: 14px; background: var(--soft); color: var(--ink); transition: border-color .15s, box-shadow .15s, background .15s; }
+    .lookup-input:focus { outline: 0; border-color: var(--teal); background: var(--card); box-shadow: 0 0 0 4px rgba(15,166,138,.15); }
+    .lookup-input::placeholder { color: #94a3b8; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 1rem; }
+    .lookup-actions { display: flex; gap: 10px; margin-top: 14px; }
+    .lookup-submit { flex: 1; background: var(--teal); color: #fff; border: 0; border-radius: 12px; padding: 16px 24px; font-weight: 800; font-size: 1rem; cursor: pointer; transition: background .15s, transform .1s; box-shadow: 0 10px 24px -10px rgba(15,166,138,.7); }
+    .lookup-submit:hover { background: var(--teal2); transform: translateY(-1px); }
+    .lookup-submit:active { transform: translateY(0); }
+    .lookup-alert { margin-top: 16px; padding: 12px 16px; border-radius: 10px; font-size: .88rem; font-weight: 600; display: flex; align-items: center; gap: 10px; line-height: 1.5; }
+    .lookup-alert.error { background: #fff6f5; border: 1px solid rgba(192,57,43,.3); color: #8f2a1e; }
+    .lookup-alert.info { background: #e2eefc; border: 1px solid rgba(22,100,176,.3); color: #0b4a8f; }
+    .lookup-tips { margin-top: 24px; padding-top: 20px; border-top: 1px dashed var(--line); }
+    .lookup-tips .tip-label { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 10px; }
+    .lookup-tips .tip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media (max-width: 640px) { .lookup-tips .tip-grid { grid-template-columns: 1fr; } }
+    .lookup-tips .tip { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .82rem; }
+    .lookup-tips .tip b { display: block; font-size: .78rem; margin-bottom: 3px; color: var(--ink); }
+    .lookup-tips .tip span { color: var(--muted); font-family: ui-monospace, monospace; font-size: .78rem; }
+    .recent-section { margin-top: 24px; }
+    .recent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .recent-header h3 { margin: 0; font-size: .85rem; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+    .recent-header .badge-count { background: var(--teal); color: #fff; border-radius: 99px; padding: 2px 10px; font-size: .72rem; font-weight: 800; }
+    .recent-list { display: flex; flex-direction: column; gap: 6px; }
+    .recent-item { display: flex; align-items: center; gap: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; text-decoration: none; color: inherit; transition: border-color .15s, background .15s; }
+    .recent-item:hover { border-color: var(--teal); background: rgba(15,166,138,.04); }
+    .recent-item .sid-chip { font-family: ui-monospace, monospace; font-weight: 700; color: var(--teal2); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; font-size: .78rem; }
+    .recent-item .name { flex: 1; font-weight: 600; font-size: .9rem; }
+    .recent-item .queue { font-family: ui-monospace, monospace; font-size: .82rem; color: var(--muted); }
+    .recent-empty { text-align: center; color: var(--muted); font-size: .85rem; padding: 16px; }
+  </style>
+
+  <div class="lookup-wrap">
+
+    <div class="lookup-header">
+      <h1>Nurse station</h1>
+      <p>Enter the System ID, queue number, or NID to open vitals</p>
+    </div>
+
+    <form method="get" class="lookup-card">
+      <div class="lookup-input-wrap">
+        <span class="icon">🩺</span>
+        <input type="text"
+               name="sid"
+               value="{{ sid }}"
+               class="lookup-input"
+               placeholder="Type System ID, queue number, or NID"
+               autocomplete="off"
+               autofocus
+               autocapitalize="characters">
+      </div>
+
+      <div class="lookup-actions">
+        <button type="submit" class="lookup-submit">
+          💉 Open vitals
+        </button>
+      </div>
+
+      {% if lookup_error %}
+        <div class="lookup-alert error">⚠️ {{ lookup_error }}</div>
+      {% endif %}
+      {% if lookup_status %}
+        <div class="lookup-alert info">ℹ️ {{ lookup_status }}</div>
+      {% endif %}
+
+      <div class="lookup-tips">
+        <div class="tip-label">You can also enter:</div>
+        <div class="tip-grid">
+          <div class="tip"><b>Queue number</b><span>A-001</span></div>
+          <div class="tip"><b>National ID</b><span>12345678</span></div>
+          <div class="tip"><b>System ID</b><span>MC-2026-0001</span></div>
+        </div>
+      </div>
+    </form>
+
+    <div class="recent-section">
+      <div class="recent-header">
+        <h3>At your counter now</h3>
+        <span class="badge-count">{{ pending_count }}</span>
+      </div>
+
+      {% if recent %}
+        <div class="recent-list">
+          {% for v in recent %}
+            <a href="{% url 'clinical:visit_detail' v.queue_number %}" class="recent-item">
+              <span class="sid-chip">{{ v.patient.sid }}</span>
+              <span class="name">{{ v.patient.full_name }}</span>
+              <span class="queue">{{ v.queue_number }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="recent-empty">
+          No patients at the nurse station right now.
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+{% endblock %}
