@@ -41,3 +41,8 @@ celerybeat.pid
 .DS_Store
 Thumbs.db
 desktop.ini
+# ---- Backups ----
+*.bak
+*.bak2
+*.bak3
+db.sqlite3.bak*
