@@ -490,14 +490,22 @@
                     </span>
                   </div>
                   <div style="display:flex;gap:6px;align-items:center">
-                    {% if rx.drug %}
-                      <span class="badge b-active">✓ Priced</span>
-                    {% else %}
+                    {% if user_role == "admin" %}
                       <form method="post" action="{% url 'clinical:price_prescription' visit.queue_number rx.id %}" style="display:flex;gap:4px;margin:0">
                         {% csrf_token %}
-                        <input class="form-input" name="price" type="number" placeholder="Ksh" style="width:90px;padding:6px 8px;font-size:.8rem">
-                        <button type="submit" class="btn-o btn-sm">Set price</button>
+                        <input class="form-input" name="price" type="number" step="0.01" placeholder="Ksh"
+                               value="{{ rx.drug.price_ksh|default_if_none:'' }}"
+                               style="width:90px;padding:6px 8px;font-size:.8rem">
+                        <button type="submit" class="btn-o btn-sm">
+                          {% if rx.drug %}Update{% else %}Set{% endif %}
+                        </button>
                       </form>
+                    {% else %}
+                      {% if rx.drug %}
+                        <span class="badge b-active">✓ Priced · Ksh {{ rx.drug.price_ksh }}</span>
+                      {% else %}
+                        <span class="badge b-pending">⏳ Awaiting pricing (admin)</span>
+                      {% endif %}
                     {% endif %}
                   </div>
                 </div>

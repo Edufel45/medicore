@@ -25,6 +25,7 @@ from apps.accounts.decorators import role_required
 from apps.accounts.models import AuditLog
 from apps.billing.models import Bill, Payment
 from apps.clinical.models import Visit
+from apps.clinical.views import _complete_visit_after_payment
 
 from .daraja import DarajaError, get_daraja
 from .models import CallbackLog, MPesaTransaction
@@ -210,6 +211,9 @@ def simulate_callback(request, transaction_id):
         processing_note=f"Simulated success · {receipt}",
     )
 
+    messages.success(request, f"Callback simulated. Receipt {receipt}.")
+    return redirect("clinical:visit_detail", queue_number=txn.visit.queue_number)
+
 
 # ------------------------------------------------------------
 # Reversal (refund) — accountant only
@@ -292,16 +296,6 @@ def reversal_initiate(request, transaction_id):
         f"Daraja will process it shortly."
     )
     return redirect("mpesa:transactions")
-
-    AuditLog.objects.create(
-        user=request.user, role="pharmacy", action="payment.pharmacy",
-        detail=f"{txn.visit.patient.sid} · simulated callback · Ksh {txn.amount}",
-        patient_sid=txn.visit.patient.sid,
-        path=request.path, method=request.method,
-    )
-
-    messages.success(request, f"Callback simulated. Receipt {receipt}.")
-    return redirect("clinical:visit_detail", queue_number=txn.visit.queue_number)
 
 
 # ------------------------------------------------------------
@@ -418,6 +412,7 @@ def c2b_register(request):
     )
     return redirect("mpesa:transactions")
 
+
 # ------------------------------------------------------------
 # Transaction log (accountant view)
 # ------------------------------------------------------------
@@ -457,7 +452,8 @@ def transactions(request):
 def _attach_payment_for_transaction(txn, receipt=""):
     """
     Called when a transaction is marked success.
-    Creates a Payment on the visit's bill and recomputes totals.
+    Creates a Payment on the visit's bill, recomputes totals,
+    then completes the visit (dispense, receipt, SHA claim, done).
     """
     if not txn.visit:
         return
@@ -469,14 +465,25 @@ def _attach_payment_for_transaction(txn, receipt=""):
     if Payment.objects.filter(mpesa_transaction=txn).exists():
         return
 
-    Payment.objects.create(
-        bill=bill,
-        method="mpesa",
-        amount=txn.amount,
-        status="success",
-        confirmed_at=timezone.now(),
-        mpesa_transaction=txn,
-        mpesa_receipt=receipt,
-        initiated_by=txn.initiated_by,
-    )
-    bill.recompute_totals()
+    from django.db import transaction as _tx
+
+    with _tx.atomic():
+        Payment.objects.create(
+            bill=bill,
+            method="mpesa",
+            amount=txn.amount,
+            status="success",
+            confirmed_at=timezone.now(),
+            mpesa_transaction=txn,
+            mpesa_receipt=receipt,
+            initiated_by=txn.initiated_by,
+        )
+        bill.recompute_totals()
+
+        visit = txn.visit
+        if visit.stage != "done":
+            _complete_visit_after_payment(
+                visit, bill, "mpesa",
+                txn.initiated_by,
+                request=None,
+            )

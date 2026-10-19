@@ -82,6 +82,88 @@ def _get_bill_or_none(visit):
         return None
 
 
+def _ensure_bill(visit):
+    """Return the visit's bill, creating one if it doesn't exist yet."""
+    bill = _get_bill_or_none(visit)
+    if bill is None:
+        bill = Bill.objects.create(visit=visit)
+    return bill
+
+
+def _complete_visit_after_payment(visit, bill, method, user, request=None):
+    """
+    Shared completion logic for both direct cash payment and M-Pesa
+    (STK / simulated callback). Must be called inside a transaction.
+
+    - Dispenses all prescriptions
+    - Marks visit 'done' + completed_at
+    - Creates Receipt + PDF
+    - Fires SHA claim
+    """
+    for rx in visit.prescriptions.filter(is_dispensed=False):
+        rx.is_dispensed = True
+        rx.dispensed_at = timezone.now()
+        rx.save(update_fields=["is_dispensed", "dispensed_at"])
+
+    visit.stage = "done"
+    visit.completed_at = timezone.now()
+    visit.save(update_fields=["stage", "completed_at", "updated_at"])
+
+    if request is not None:
+        AuditLog.objects.create(
+            user=user, role="pharmacy", action="payment.pharmacy",
+            detail=f"{visit.patient.sid} · Ksh {bill.total_amount} · {method}",
+            patient_sid=visit.patient.sid,
+            path=request.path, method=request.method,
+        )
+    else:
+        AuditLog.objects.create(
+            user=user, role="pharmacy", action="payment.pharmacy",
+            detail=f"{visit.patient.sid} · Ksh {bill.total_amount} · {method} (auto)",
+            patient_sid=visit.patient.sid,
+            path="mpesa-callback", method="POST",
+        )
+
+    try:
+        create_sha_claim_if_needed(visit, user=user)
+    except Exception as exc:
+        logger.warning("SHA claim creation failed (ignored): %s", exc)
+
+    receipt, _ = Receipt.objects.get_or_create(
+        bill=bill,
+        defaults={
+            "total_paid": bill.paid_amount,
+            "sha_covered": bill.sha_covered_amount or 0,
+            "issued_by": user,
+        },
+    )
+    try:
+        pdf_url = store_receipt_pdf(receipt, bill, visit, force_local=True)
+        if pdf_url:
+            receipt.pdf_url = pdf_url
+            receipt.save(update_fields=["pdf_url"])
+    except Exception as exc:
+        logger.warning("Receipt PDF failed: %s", exc)
+
+
+def _backfill_drug_line_items(visit, bill):
+    """
+    Self-heal: ensure every priced prescription has a matching drug line
+    item on the bill. Covers cases where price_prescription ran before
+    the bill existed, or through a legacy path.
+    """
+    for rx in visit.prescriptions.all():
+        if rx.drug and rx.drug.price_ksh:
+            already = bill.line_items.filter(kind="drug", prescription=rx).exists()
+            if not already:
+                bill.add_line_item(
+                    label=f"Drug: {rx.drug.name}",
+                    amount=rx.drug.price_ksh,
+                    kind="drug",
+                    prescription=rx,
+                )
+
+
 # ------------------------------------------------------------
 # Queue board
 # ------------------------------------------------------------
@@ -361,19 +443,34 @@ def add_prescription(request, queue_number):
         .first()
     )
 
-    Prescription.objects.create(
-        visit=visit,
-        drug_name_typed=drug_name,
-        drug=resolved,
-        prescribed_by=request.user,
-    )
+    with transaction.atomic():
+        rx = Prescription.objects.create(
+            visit=visit,
+            drug_name_typed=drug_name,
+            drug=resolved,
+            prescribed_by=request.user,
+        )
 
-    AuditLog.objects.create(
-        user=request.user, role="doctor", action="rx.add",
-        detail=f"{visit.patient.sid} · {drug_name}",
-        patient_sid=visit.patient.sid,
-        path=request.path, method=request.method,
-    )
+        # If the drug is already in the catalogue AND priced, add it to
+        # the bill immediately. Unknown drugs stay unpriced; admin will
+        # price them later via price_prescription.
+        if resolved and resolved.price_ksh and resolved.price_ksh > 0:
+            bill = _ensure_bill(visit)
+            already = bill.line_items.filter(kind="drug", prescription=rx).exists()
+            if not already:
+                bill.add_line_item(
+                    label=f"Drug: {resolved.name}",
+                    amount=resolved.price_ksh,
+                    kind="drug",
+                    prescription=rx,
+                )
+
+        AuditLog.objects.create(
+            user=request.user, role="doctor", action="rx.add",
+            detail=f"{visit.patient.sid} · {drug_name}",
+            patient_sid=visit.patient.sid,
+            path=request.path, method=request.method,
+        )
 
     messages.success(request, f"Prescription added: {drug_name}")
     return redirect("clinical:visit_detail", queue_number=queue_number)
@@ -396,14 +493,22 @@ def remove_prescription(request, queue_number, prescription_id):
         return redirect("clinical:visit_detail", queue_number=queue_number)
 
     name = rx.drug_name_typed
-    rx.delete()
 
-    AuditLog.objects.create(
-        user=request.user, role="doctor", action="rx.remove",
-        detail=f"{visit.patient.sid} · {name}",
-        patient_sid=visit.patient.sid,
-        path=request.path, method=request.method,
-    )
+    with transaction.atomic():
+        # Remove any drug line item on the bill tied to this prescription
+        bill = _get_bill_or_none(visit)
+        if bill:
+            bill.line_items.filter(kind="drug", prescription=rx).delete()
+            bill.recompute_totals()
+
+        rx.delete()
+
+        AuditLog.objects.create(
+            user=request.user, role="doctor", action="rx.remove",
+            detail=f"{visit.patient.sid} · {name}",
+            patient_sid=visit.patient.sid,
+            path=request.path, method=request.method,
+        )
 
     messages.success(request, f"Removed {name}.")
     return redirect("clinical:visit_detail", queue_number=queue_number)
@@ -437,14 +542,13 @@ def add_lab_order(request, queue_number):
         ordered_by=request.user,
     )
 
-    bill = _get_bill_or_none(visit)
-    if bill:
-        bill.add_line_item(
-            label=f"Lab: {test_name}",
-            amount=price,
-            kind="lab",
-            lab_test=lt,
-        )
+    bill = _ensure_bill(visit)
+    bill.add_line_item(
+        label=f"Lab: {test_name}",
+        amount=price,
+        kind="lab",
+        lab_test=lt,
+    )
 
     AuditLog.objects.create(
         user=request.user, role="doctor", action="other",
@@ -556,36 +660,44 @@ def price_prescription(request, queue_number, prescription_id):
         messages.error(request, "Price must be greater than zero.")
         return redirect("clinical:visit_detail", queue_number=queue_number)
 
-    drug, created = Drug.objects.get_or_create(
-        name=rx.drug_name_typed.strip().lower(),
-        defaults={
-            "price_ksh": price,
-            "unit": "unit",
-            "is_active": True,
-        },
-    )
-    if not created and drug.price_ksh != price:
-        drug.price_ksh = price
-        drug.save(update_fields=["price_ksh"])
-
-    rx.drug = drug
-    rx.save(update_fields=["drug"])
-
-    bill = _get_bill_or_none(visit)
-    if bill:
-        bill.add_line_item(
-            label=f"Drug: {drug.name}",
-            amount=price,
-            kind="drug",
-            prescription=rx,
+    with transaction.atomic():
+        drug, created = Drug.objects.get_or_create(
+            name=rx.drug_name_typed.strip().lower(),
+            defaults={
+                "price_ksh": price,
+                "unit": "unit",
+                "is_active": True,
+            },
         )
+        if not created and drug.price_ksh != price:
+            drug.price_ksh = price
+            drug.save(update_fields=["price_ksh"])
 
-    AuditLog.objects.create(
-        user=request.user, role="pharmacy", action="drug.price.set",
-        detail=f"{rx.drug_name_typed} → Ksh {price}",
-        patient_sid=visit.patient.sid,
-        path=request.path, method=request.method,
-    )
+        rx.drug = drug
+        rx.save(update_fields=["drug"])
+
+        bill = _ensure_bill(visit)
+        already = bill.line_items.filter(kind="drug", prescription=rx).exists()
+        if not already:
+            bill.add_line_item(
+                label=f"Drug: {drug.name}",
+                amount=price,
+                kind="drug",
+                prescription=rx,
+            )
+        else:
+            li = bill.line_items.filter(kind="drug", prescription=rx).first()
+            if li and li.amount != price:
+                li.amount = price
+                li.save(update_fields=["amount"])
+                bill.recompute_totals()
+
+        AuditLog.objects.create(
+            user=request.user, role="pharmacy", action="drug.price.set",
+            detail=f"{rx.drug_name_typed} → Ksh {price}",
+            patient_sid=visit.patient.sid,
+            path=request.path, method=request.method,
+        )
 
     messages.success(request, f"Price set: {drug.name} → Ksh {price}")
     return redirect("clinical:visit_detail", queue_number=queue_number)
@@ -601,10 +713,10 @@ def collect_payment(request, queue_number):
     if request.method != "POST":
         return redirect("clinical:visit_detail", queue_number=queue_number)
 
-    bill = _get_bill_or_none(visit)
-    if not bill:
-        messages.error(request, "No bill found.")
-        return redirect("clinical:visit_detail", queue_number=queue_number)
+    bill = _ensure_bill(visit)
+
+    # Self-heal: backfill drug line items for priced prescriptions
+    _backfill_drug_line_items(visit, bill)
 
     bill.recompute_totals()
     if bill.balance_due <= 0:
@@ -634,43 +746,7 @@ def collect_payment(request, queue_number):
             ),
         )
         bill.recompute_totals()
-
-        for rx in visit.prescriptions.filter(is_dispensed=False):
-            rx.is_dispensed = True
-            rx.dispensed_at = timezone.now()
-            rx.save(update_fields=["is_dispensed", "dispensed_at"])
-
-        visit.stage = "done"
-        visit.completed_at = timezone.now()
-        visit.save(update_fields=["stage", "completed_at", "updated_at"])
-
-        AuditLog.objects.create(
-            user=request.user, role="pharmacy", action="payment.pharmacy",
-            detail=f"{visit.patient.sid} · Ksh {bill.total_amount} · {method}",
-            patient_sid=visit.patient.sid,
-            path=request.path, method=request.method,
-        )
-
-        try:
-            create_sha_claim_if_needed(visit, user=request.user)
-        except Exception as exc:
-            logger.warning("SHA claim creation failed (ignored): %s", exc)
-
-        receipt, _ = Receipt.objects.get_or_create(
-            bill=bill,
-            defaults={
-                "total_paid": bill.paid_amount,
-                "sha_covered": bill.sha_covered_amount or 0,
-                "issued_by": request.user,
-            },
-        )
-        try:
-            pdf_url = store_receipt_pdf(receipt, bill, visit, force_local=True)
-            if pdf_url:
-                receipt.pdf_url = pdf_url
-                receipt.save(update_fields=["pdf_url"])
-        except Exception as exc:
-            logger.warning("Receipt PDF failed: %s", exc)
+        _complete_visit_after_payment(visit, bill, method, request.user, request=request)
 
     messages.success(
         request,
