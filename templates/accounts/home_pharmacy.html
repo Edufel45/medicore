@@ -2,25 +2,124 @@
 {% block title %}Pharmacy — MediCore{% endblock %}
 
 {% block content %}
-  <h1>Good morning</h1>
-  <p class="sub">Pharmacist · dispense, price drugs, and collect payment (SHA or M-Pesa).</p>
+  <style>
+    .pharm-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+    @media (max-width: 900px) { .pharm-kpis { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .pharm-kpis { grid-template-columns: 1fr; } }
+    .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
+    .kpi::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #d97706; opacity: .9; }
+    .kpi.kpi-warn::after { background: #dc2626; }
+    .kpi.kpi-ok::after { background: #16a34a; }
+    .kpi small { display: block; color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; margin-bottom: 4px; }
+    .kpi b { font-size: 1.8rem; color: #b45309; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .kpi .unit { font-size: .9rem; font-weight: 600; color: var(--muted); margin-left: 4px; }
+    .kpi .flash.bump { color: #16a34a; }
+    .actions { display: flex; flex-direction: column; gap: 8px; }
+    .action-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--soft); border: 1px solid var(--line); border-left: 3px solid #d97706; border-radius: 12px; text-decoration: none; color: inherit; transition: border-color .15s, background .15s, transform .1s; }
+    .action-row:hover { border-color: #d97706; background: rgba(217,119,6,.06); transform: translateX(2px); }
+    .action-row .ico { width: 40px; height: 40px; border-radius: 10px; background: rgba(217,119,6,.14); display: grid; place-items: center; font-size: 1.15rem; flex-shrink: 0; }
+    .action-row .lbl { flex: 1; }
+    .action-row .lbl b { display: block; font-size: .95rem; margin-bottom: 2px; }
+    .action-row .lbl span { color: var(--muted); font-size: .82rem; }
+    .action-row .arrow { color: var(--muted); font-size: 1.1rem; }
+    .stale { font-size: .72rem; color: var(--muted); text-align: right; margin-top: 8px; }
+    .stale.err { color: #b91c1c; }
+  </style>
 
-  <div class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Prescriptions</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Low stock</small><b style="font-size:1.5rem;color:var(--warn)">0</b></div>
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Collected today</small><b style="font-size:1.5rem;color:var(--navy)">Ksh 0</b></div>
-    <div class="card"><small style="display:block;color:var(--muted);font-size:.74rem">Dispensed today</small><b style="font-size:1.5rem;color:var(--navy)">0</b></div>
+  <h1>Good morning, pharmacy</h1>
+  <p class="sub">Dispense, price drugs, and collect payment (SHA or M-Pesa).</p>
+
+  <div class="pharm-kpis">
+    <div class="kpi">
+      <small>Prescriptions</small>
+      <b><span class="flash" data-k="prescriptions">–</span></b>
+    </div>
+    <div class="kpi kpi-warn">
+      <small>Low stock</small>
+      <b><span class="flash" data-k="low_stock">–</span></b>
+    </div>
+    <div class="kpi">
+      <small>Collected today</small>
+      <b><span class="unit">Ksh</span> <span class="flash" data-k="collected_today">–</span></b>
+    </div>
+    <div class="kpi kpi-ok">
+      <small>Dispensed today</small>
+      <b><span class="flash" data-k="dispensed_today">–</span></b>
+    </div>
   </div>
+  <div class="stale" id="stale">waiting for first refresh…</div>
 
-  <div class="card">
+  <div class="card" style="margin-top:20px">
     <h2>Quick actions</h2>
-    <div class="row click" onclick="alert('Pharmacy queue — Phase 6')">
-      <div class="l"><b>🧭 Open pharmacy queue</b><span>Prescriptions waiting to fill</span></div>
-      →
-    </div>
-    <div class="row click" onclick="alert('Drug catalogue — Phase 6')">
-      <div class="l"><b>💊 Drug catalogue</b><span>Names, prices, stock levels</span></div>
-      →
+    <div class="actions">
+      <a class="action-row" href="{% url 'clinical:pharmacy_lookup' %}">
+        <div class="ico">💊</div>
+        <div class="lbl">
+          <b>Open pharmacy lookup</b>
+          <span>Search patient by SID, queue number, or NID</span>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+      <a class="action-row" href="{% url 'clinical:queue' %}">
+        <div class="ico">🗂</div>
+        <div class="lbl">
+          <b>Pharmacy queue</b>
+          <span>Prescriptions waiting to fill</span>
+        </div>
+        <span class="arrow">→</span>
+      </a>
     </div>
   </div>
+
+  <script>
+    (function () {
+      const URL = "{% url 'clinical:pharmacy_stats' %}";
+      const REFRESH_MS = 15000;
+      const stale = document.getElementById("stale");
+      const lastValues = {};
+
+      function setVal(key, val) {
+        const el = document.querySelector('[data-k="' + key + '"]');
+        if (!el) return;
+        let next;
+        if (val === null || val === undefined) {
+          next = "–";
+        } else if (key === "collected_today") {
+          next = Number(val).toLocaleString();
+        } else {
+          next = String(val);
+        }
+        if (lastValues[key] !== next) {
+          el.textContent = next;
+          el.classList.add("bump");
+          setTimeout(() => el.classList.remove("bump"), 400);
+          lastValues[key] = next;
+        }
+      }
+
+      function stamp() {
+        return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      async function refresh() {
+        try {
+          const r = await fetch(URL, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const data = await r.json();
+          setVal("prescriptions", data.prescriptions);
+          setVal("low_stock", data.low_stock);
+          setVal("collected_today", data.collected_today);
+          setVal("dispensed_today", data.dispensed_today);
+          stale.classList.remove("err");
+          stale.textContent = "updated " + stamp() + " · auto-refresh every 15s";
+        } catch (err) {
+          stale.classList.add("err");
+          stale.textContent = "update failed (" + err.message + ") — retrying…";
+        }
+      }
+
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    })();
+  </script>
 {% endblock %}

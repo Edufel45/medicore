@@ -45,9 +45,9 @@ NAV_BY_ROLE = {
         {"key": "patients", "label": "Patients", "icon": "👥"},
     ],
     "nurse": [
-        {"key": "",         "label": "Home",     "icon": "🏠"},
-        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
-        {"key": "patients", "label": "Patients", "icon": "👥"},
+        {"key": "nurse/lookup", "label": "Lookup",   "icon": "🔍"},
+        {"key": "queue",        "label": "Queue",    "icon": "🧭"},
+        {"key": "patients",     "label": "Patients", "icon": "👥"},
     ],
     "doctor": [
         {"key": "doctor/lookup", "label": "Lookup",    "icon": "🔍"},
@@ -55,15 +55,15 @@ NAV_BY_ROLE = {
         {"key": "lab/inbox",     "label": "Lab inbox", "icon": "📥"},
         {"key": "patients",      "label": "Patients",  "icon": "👥"},
     ],
-          "lab": [
+    "lab": [
         {"key": "lab/lookup", "label": "Lookup",   "icon": "🔍"},
         {"key": "queue",      "label": "Queue",    "icon": "🧭"},
         {"key": "patients",   "label": "Patients", "icon": "👥"},
     ],
     "pharmacy": [
-        {"key": "",         "label": "Home",     "icon": "🏠"},
-        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
-        {"key": "patients", "label": "Patients", "icon": "👥"},
+        {"key": "pharmacy/lookup", "label": "Lookup",   "icon": "🔍"},
+        {"key": "queue",           "label": "Queue",    "icon": "🧭"},
+        {"key": "patients",        "label": "Patients", "icon": "👥"},
     ],
     "accounts": [
         {"key": "",                   "label": "Home",     "icon": "🏠"},

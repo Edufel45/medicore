@@ -1114,3 +1114,137 @@ def lab_stats(request):
         "released_today": released_today,
         "oldest_wait_min": oldest_wait_min,
     })
+
+
+# ------------------------------------------------------------
+# Pharmacy — key-in lookup (paper slip workflow)
+# ------------------------------------------------------------
+@login_required
+@role_required("pharmacy", "admin")
+def pharmacy_lookup(request):
+    """
+    /pharmacy/lookup/ — the pharmacist's main workflow.
+
+    Accepts: System ID, queue number, or NID.
+    Only opens visits currently at the pharmacy stage.
+    """
+    sid = (request.GET.get("sid") or "").strip().upper()
+    visit = None
+    lookup_error = ""
+    lookup_status = ""
+
+    if sid:
+        # 1. Try System ID
+        patient = Patient.objects.filter(sid__iexact=sid).first()
+        if patient:
+            visit = (
+                Visit.objects
+                .filter(patient=patient, stage="pharmacy")
+                .select_related("patient")
+                .order_by("-started_at")
+                .first()
+            )
+            if not visit:
+                other = (
+                    Visit.objects
+                    .filter(patient=patient)
+                    .exclude(stage="done")
+                    .order_by("-started_at")
+                    .first()
+                )
+                if other:
+                    lookup_status = (
+                        f"Patient {patient.sid} is currently at "
+                        f"{other.get_stage_display()} — not yet at the pharmacy."
+                    )
+                else:
+                    lookup_status = f"Patient {patient.sid} found but has no active visit."
+        else:
+            # 2. Try queue number
+            visit = (
+                Visit.objects
+                .filter(queue_number__iexact=sid, stage="pharmacy")
+                .select_related("patient")
+                .first()
+            )
+            if not visit:
+                # 3. Try NID
+                patient = Patient.objects.filter(national_id=sid).first()
+                if patient:
+                    visit = (
+                        Visit.objects
+                        .filter(patient=patient, stage="pharmacy")
+                        .select_related("patient")
+                        .order_by("-started_at")
+                        .first()
+                    )
+                    if not visit:
+                        lookup_status = f"Patient (NID {sid}) is not currently at the pharmacy."
+                else:
+                    lookup_error = f'No patient found for "{sid}".'
+
+        if visit:
+            return redirect("clinical:visit_detail", queue_number=visit.queue_number)
+
+    recent = (
+        Visit.objects
+        .filter(stage="pharmacy")
+        .select_related("patient")
+        .prefetch_related("prescriptions")
+        .order_by("-updated_at")[:5]
+    )
+
+    return render(request, "clinical/pharmacy_lookup.html", {
+        "sid": sid,
+        "lookup_error": lookup_error,
+        "lookup_status": lookup_status,
+        "recent": recent,
+        "pending_count": Visit.objects.filter(stage="pharmacy").count(),
+    })
+
+
+# ------------------------------------------------------------
+# Pharmacy — stat counts for home dashboard
+# ------------------------------------------------------------
+@login_required
+@role_required("pharmacy", "admin")
+def pharmacy_stats(request):
+    """
+    /pharmacy/stats/ — JSON with pharmacy dashboard counts.
+    Used by home_pharmacy.html to show live numbers.
+    """
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    prescriptions = Prescription.objects.filter(
+        visit__stage="pharmacy", is_dispensed=False,
+    ).count()
+
+    low_stock = (
+        Drug.objects
+        .filter(is_active=True, stock_batches__quantity_remaining__lte=10)
+        .distinct()
+        .count()
+    )
+
+    collected_today = 0
+    dispensed_today = Prescription.objects.filter(
+        is_dispensed=True, dispensed_at__gte=today_start,
+    ).count()
+
+    try:
+        from apps.billing.models import Payment
+        collected_today = float(
+            Payment.objects
+            .filter(status="success", confirmed_at__gte=today_start)
+            .aggregate(total=__import__("django.db.models", fromlist=["Sum"]).Sum("amount"))["total"]
+            or 0
+        )
+    except Exception:
+        collected_today = 0
+
+    return JsonResponse({
+        "prescriptions": prescriptions,
+        "low_stock": low_stock,
+        "collected_today": collected_today,
+        "dispensed_today": dispensed_today,
+    })

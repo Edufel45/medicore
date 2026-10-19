@@ -25,6 +25,7 @@ def home(request):
     - Doctor goes straight to the key-in lookup.
     - Nurse goes straight to their lookup / vitals station.
     - Lab technician goes straight to their lookup station.
+    - Pharmacy staff go straight to their lookup station.
     - Everyone else uses their role dashboard.
     """
     role = None
@@ -44,6 +45,10 @@ def home(request):
     # Lab technicians land on their lookup station
     if role == "lab":
         return redirect("clinical:lab_lookup")
+
+    # Pharmacy staff land on their lookup station
+    if role == "pharmacy":
+        return redirect("clinical:pharmacy_lookup")
 
     template_map = {
         "reception": "accounts/home_reception.html",

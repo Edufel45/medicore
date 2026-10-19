@@ -55,10 +55,10 @@ NAV_BY_ROLE = {
         {"key": "lab/inbox",     "label": "Lab inbox", "icon": "📥"},
         {"key": "patients",      "label": "Patients",  "icon": "👥"},
     ],
-    "lab": [
-        {"key": "",         "label": "Home",     "icon": "🏠"},
-        {"key": "queue",    "label": "Queue",    "icon": "🧭"},
-        {"key": "patients", "label": "Patients", "icon": "👥"},
+          "lab": [
+        {"key": "lab/lookup", "label": "Lookup",   "icon": "🔍"},
+        {"key": "queue",      "label": "Queue",    "icon": "🧭"},
+        {"key": "patients",   "label": "Patients", "icon": "👥"},
     ],
     "pharmacy": [
         {"key": "",         "label": "Home",     "icon": "🏠"},
