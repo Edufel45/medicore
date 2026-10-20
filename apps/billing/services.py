@@ -164,7 +164,7 @@ def store_receipt_pdf(receipt, bill, visit, force_local=False):
         if url:
             return url
 
-    return _save_to_local(path, pdf_bytes) 
+    return _save_to_local(path, pdf_bytes)
 
 
 # ------------------------------------------------------------
@@ -177,9 +177,16 @@ def create_sha_claim_if_needed(visit, user=None):
       - No claim exists yet for this visit
       - The bill has a total > 0
 
+    SHA coverage is computed per line-item kind:
+      consultation  70%
+      lab           70%
+      registration   0%   (patient pays)
+      drug           0%   (patient pays, EML restriction)
+      other          0%   (default)
+
     Returns the created/existing SHAClaim, or None if not applicable.
     """
-    from decimal import Decimal
+    from decimal import Decimal, ROUND_HALF_UP
     from django.utils import timezone as _tz
 
     from apps.sha.models import SHAClaim
@@ -198,9 +205,30 @@ def create_sha_claim_if_needed(visit, user=None):
     if existing:
         return existing
 
-    # Build the claim
-    claim_amount = bill.sha_covered_amount or bill.total_amount
+    # ---- Compute SHA coverage per line-item kind ----
+    SHA_COVERAGE_BY_KIND = {
+        "consultation": Decimal("0.70"),
+        "lab":          Decimal("0.70"),
+        "registration": Decimal("0.00"),
+        "drug":         Decimal("0.00"),
+        "other":        Decimal("0.00"),
+    }
 
+    sha_covered = Decimal("0.00")
+    for li in bill.line_items.all():
+        pct = SHA_COVERAGE_BY_KIND.get(li.kind, Decimal("0.00"))
+        sha_covered += (li.amount or Decimal("0.00")) * pct
+
+    # Round to whole shilling
+    sha_covered = sha_covered.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+    # Persist on bill so the receipt + UI can display it
+    bill.sha_covered_amount = sha_covered
+    bill.save(update_fields=["sha_covered_amount"])
+
+    claim_amount = sha_covered
+
+    # ---- Build the claim ----
     claim = SHAClaim(
         visit=visit,
         claim_reference=SHAClaim.generate_reference(patient.sid),
