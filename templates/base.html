@@ -120,19 +120,6 @@
   </div>
 </div>
 
-{# ================= Floating Action Button ================= #}
-{# Only shown to the receptionist — quickly jump to registration #}
-{% if current_role == "reception" or current_role == "admin" %}
-  {% block fab %}
-    <a href="{% url 'patients:register' %}"
-       class="fab"
-       title="Register a new patient"
-       aria-label="Register a new patient">
-      New patient
-    </a>
-  {% endblock %}
-{% endif %}
-
 {# ================= Notification toggle JS ================= #}
 <script>
   function toggleNotifications(e) {

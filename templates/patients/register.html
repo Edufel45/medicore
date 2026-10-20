@@ -163,6 +163,14 @@
     }
     .sha-required-warning.hidden { display: none; }
 
+    .sha-optional-hint {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 10px;
+      background: #e2eefc; border: 1px solid rgba(22,100,176,.3);
+      color: #0b4a8f; font-size: .82rem; font-weight: 600;
+      margin-bottom: 14px;
+    }
+
     .reg-footer {
       display: flex; justify-content: space-between; align-items: center;
       gap: 12px; margin-top: 24px; padding-top: 20px;
@@ -186,7 +194,7 @@
     <div class="reg-header">
       <div>
         <h1>Register a new patient</h1>
-        <p class="sub">Fill in details, then verify SHA via OTP before proceeding.</p>
+        <p class="sub">Fill in details. SHA verification is optional — verify to auto-apply coverage, or skip if patient has no SHA.</p>
       </div>
       <a href="{% url 'accounts:home' %}" class="reg-back">← Cancel</a>
     </div>
@@ -245,7 +253,11 @@
         <!-- RIGHT COLUMN -->
         <div>
           <div class="reg-section">
-            <div class="reg-section-title">🛡️ SHA verification <span style="color:var(--bad);font-size:.65rem;letter-spacing:0;margin-left:6px">REQUIRED</span></div>
+            <div class="reg-section-title">🛡️ SHA verification <span style="color:var(--blue);font-size:.65rem;letter-spacing:0;margin-left:6px">OPTIONAL</span></div>
+
+            <div class="sha-optional-hint">
+              ⓘ SHA is optional. If the patient has an SHA number, verify it below to auto-apply coverage. Skip if no SHA — patient pays via M-Pesa at checkout.
+            </div>
 
             <div class="sha-box" id="shaBox">
 
@@ -257,8 +269,8 @@
                          name="{{ form.sha_number.name }}"
                          id="{{ form.sha_number.id_for_label }}"
                          value="{{ form.sha_number.value|default:'' }}"
-                         placeholder="Enter SHA number"
-                         autocomplete="off" required>
+                         placeholder="Enter SHA number (or leave blank)"
+                         autocomplete="off">
                   <button type="button" class="sha-btn primary" id="sendOtpBtn" onclick="sendOtp()">
                     📲 Send code
                   </button>
@@ -290,8 +302,8 @@
 
             </div>
 
-            <div class="sha-required-warning" id="shaWarning">
-              ⚠️ You must verify the SHA number before creating the patient.
+            <div class="sha-required-warning hidden" id="shaWarning">
+              ⚠️ SHA verification is optional — you can proceed without it.
             </div>
           </div>
 
@@ -319,7 +331,7 @@
           <b>Registration fee:</b> Ksh 200<br>
           A slip will be issued automatically after registration.
         </div>
-        <button type="submit" class="reg-submit" id="submitBtn" disabled>
+        <button type="submit" class="reg-submit" id="submitBtn">
           ✅ Complete registration →
         </button>
       </div>
@@ -365,8 +377,6 @@
       otpCode.value = "";
       clearStatus(shaStatus1);
       clearStatus(shaStatus2);
-      shaWarning.classList.remove("hidden");
-      submitBtn.disabled = true;
     }
 
     // Any change to SHA or phone resets the flow
@@ -391,7 +401,7 @@
       const phone = phoneInput.value.trim();
 
       if (!sha) {
-        setStatus(shaStatus1, "bad", "Enter the SHA number first.");
+        setStatus(shaStatus1, "bad", "Enter the SHA number first, or leave it blank to skip.");
         return;
       }
       if (!phone) {
@@ -483,26 +493,13 @@
         const info = labels[status] || labels.unknown;
         setStatus(shaStatus2, info.cls, info.text);
 
-        shaWarning.classList.add("hidden");
-        submitBtn.disabled = false;
-
       } catch (err) {
         setStatus(shaStatus2, "bad", "✗ " + err.message);
         shaVerified = false;
-        submitBtn.disabled = true;
       } finally {
         confirmOtpBtn.disabled = false;
         confirmOtpBtn.textContent = "✓ Confirm";
       }
     }
-
-    // Guard: block form submit if SHA was not verified
-    document.getElementById("regForm").addEventListener("submit", function (e) {
-      if (!shaVerified) {
-        e.preventDefault();
-        setStatus(shaStatus1, "bad", "Verify SHA first.");
-        shaWarning.classList.remove("hidden");
-      }
-    });
   </script>
 {% endblock %}
