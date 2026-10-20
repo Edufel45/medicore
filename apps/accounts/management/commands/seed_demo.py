@@ -17,6 +17,9 @@ Users created (password: medicore123):
 Each user is a Django User with:
   - Group membership -> drives backend permissions
   - UserProfile.role -> drives frontend rail navigation
+
+Also seeds:
+  - Drug catalogue with common Kenyan-market drugs and prices
 """
 
 from django.contrib.auth.models import Group, User
@@ -38,9 +41,37 @@ ROLES = [
 
 DEFAULT_PASSWORD = "medicore123"
 
+DRUG_SEED = [
+    # (name, price_ksh, unit)
+    ("artemether-lumefantrine", 250, "unit"),
+    ("azithromycin 250mg",      350, "unit"),
+    ("azithromycin 500mg",      500, "unit"),
+    ("amoxicillin 250mg",       100, "unit"),
+    ("amoxicillin 500mg",       150, "unit"),
+    ("paracetamol 500mg",        20, "unit"),
+    ("paracetamol 1g",           30, "unit"),
+    ("ibuprofen 400mg",          60, "unit"),
+    ("diclofenac 50mg",          30, "unit"),
+    ("metronidazole 400mg",     100, "unit"),
+    ("doxycycline 100mg",       150, "unit"),
+    ("cotrimoxazole",            90, "unit"),
+    ("omeprazole 20mg",         150, "unit"),
+    ("cetirizine 10mg",          70, "unit"),
+    ("ferrous sulphate",         60, "unit"),
+    ("folic acid 5mg",           30, "unit"),
+    ("amlodipine 5mg",          100, "unit"),
+    ("enalapril 10mg",          120, "unit"),
+    ("metformin 500mg",          80, "unit"),
+    ("glibenclamide 5mg",        60, "unit"),
+    ("salbutamol inhaler",      500, "unit"),
+    ("prednisolone 5mg",         40, "unit"),
+    ("ceftriaxone 1g",          300, "vial"),
+    ("hydralazine 25mg",        100, "unit"),
+]
+
 
 class Command(BaseCommand):
-    help = "Seed demo users and groups for all 6 MediCore roles."
+    help = "Seed demo users, groups, and drug catalogue for MediCore."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -99,6 +130,33 @@ class Command(BaseCommand):
                     f"[{state}] {username:10s} · role={role_key:10s} · group={group_name}"
                 )
             )
+
+        # ------------------------------------------------------------
+        # Drug catalogue — seed common drugs with prices
+        # ------------------------------------------------------------
+        from apps.pharmacy.models import Drug
+
+        drugs_created = 0
+        drugs_existing = 0
+        for name, price, unit in DRUG_SEED:
+            _, was_created = Drug.objects.get_or_create(
+                name=name,
+                defaults={
+                    "price_ksh": price,
+                    "unit": unit,
+                    "is_active": True,
+                },
+            )
+            if was_created:
+                drugs_created += 1
+            else:
+                drugs_existing += 1
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"[DRUGS] {drugs_created} created · {drugs_existing} already existed"
+            )
+        )
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("✅ Demo users seeded."))
