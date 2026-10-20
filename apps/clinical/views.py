@@ -726,12 +726,50 @@ def collect_payment(request, queue_number):
     method = (request.POST.get("method") or "mpesa").strip()
 
     if method == "mpesa":
-        from apps.mpesa.daraja import get_daraja
+        # ---- Create MPesaTransaction inline (STK Push) ----
+        from apps.mpesa.models import MPesaTransaction
+        from apps.mpesa.daraja import get_daraja, DarajaError
+
+        patient = visit.patient
+        phone = (request.POST.get("phone") or "").strip() or patient.phone
+        amount = bill.balance_due
+
+        txn = MPesaTransaction.objects.create(
+            transaction_type="stk_push",
+            status="initiated",
+            amount=amount,
+            phone=phone,
+            account_reference=f"INV-{visit.queue_number}",
+            description=f"MediCore {visit.queue_number}",
+            visit=visit,
+            initiated_by=request.user,
+        )
+
         client = get_daraja()
+        try:
+            result = client.stk_push(
+                phone=phone,
+                amount=amount,
+                account_reference=f"INV-{visit.queue_number}",
+                description=f"MediCore {visit.queue_number}",
+            )
+            txn.mark_pending(
+                merchant_request_id=result.get("merchant_request_id", ""),
+                checkout_request_id=result.get("checkout_request_id", ""),
+                response=result.get("raw", {}),
+            )
+        except DarajaError as exc:
+            txn.mark_failed(reason=str(exc)[:255])
+            logger.exception("STK Push initiation failed: %s", exc)
+            messages.error(request, f"M-Pesa error: {exc}")
+            return redirect("clinical:visit_detail", queue_number=queue_number)
 
-        if not client.is_mock:
-            return redirect("mpesa:initiate", queue_number=visit.queue_number)
-
+        messages.success(
+            request,
+            f"STK Push sent to {phone} for Ksh {amount}. "
+            f"Waiting for the patient to enter their PIN…"
+        )
+        return redirect("clinical:visit_detail", queue_number=queue_number)
     with transaction.atomic():
         Payment.objects.create(
             bill=bill,

@@ -2,6 +2,10 @@
 {% block title %}Receipt {{ receipt.receipt_number }} — MediCore{% endblock %}
 
 {% block content %}
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px">
+    <button type="button" class="btn-o" onclick="window.print()">🖨️ Print receipt</button>
+    <a href="{% url 'clinical:queue' %}" class="btn-teal" style="text-decoration:none">✓ Close · Next patient →</a>
+  </div>
   <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     <div>
       <h1 style="margin:0">Receipt</h1>

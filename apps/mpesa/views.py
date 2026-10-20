@@ -211,8 +211,13 @@ def simulate_callback(request, transaction_id):
         processing_note=f"Simulated success · {receipt}",
     )
 
-    messages.success(request, f"Callback simulated. Receipt {receipt}.")
-    return redirect("clinical:visit_detail", queue_number=txn.visit.queue_number)
+    messages.success(
+        request,
+        f"✅ M-Pesa payment confirmed · Receipt {receipt}. "
+        f"{txn.visit.queue_number} complete."
+    )
+    # Land on the printable receipt — pharmacist prints, then closes back to queue.
+    return redirect("billing:receipt", queue_number=txn.visit.queue_number)
 
 
 # ------------------------------------------------------------

@@ -541,7 +541,7 @@
                 </div>
               </div>
 
-              {% if visit.stage == "pharmacy" and bill.balance_due > 0 %}
+                            {% if visit.stage == "pharmacy" and bill.balance_due > 0 %}
                 <form method="post" action="{% url 'clinical:collect_payment' visit.queue_number %}" style="margin-top:12px">
                   {% csrf_token %}
                   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -550,8 +550,15 @@
                       <option value="mpesa">M-Pesa</option>
                       <option value="cash">Cash</option>
                     </select>
+                    <input class="form-input" name="phone" type="tel"
+                           value="{{ patient.phone|default:'' }}"
+                           placeholder="M-Pesa phone (e.g. 0712345678)"
+                           style="width:200px" />
                     <button type="submit" class="btn-teal">Collect Ksh {{ bill.balance_due }} &amp; complete →</button>
                   </div>
+                  <p class="sub" style="margin:6px 0 0;font-size:.72rem">
+                    Leave phone as-is to use the patient record. Change it to send the STK to a different number.
+                  </p>
                 </form>
               {% elif visit.stage == "pharmacy" and bill.balance_due <= 0 %}
                 <div class="al g" style="margin-top:12px">Bill already settled. Patient can be discharged.</div>
@@ -599,18 +606,23 @@
                       </div>
                     {% endif %}
 
-                    {% if txn.status in "initiated,pending" %}
-                      <form method="post"
+                                        {% if txn.status in "initiated,pending" %}
+                      <div id="mpesa-waiting" style="margin-top:12px;padding:12px;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.3);border-radius:10px;text-align:center">
+                        <div style="font-weight:800;color:#b45309;margin-bottom:4px">⏳ Waiting for M-Pesa PIN…</div>
+                        <div class="sub" style="margin:0;font-size:.78rem">A prompt has been sent to <b>{{ txn.phone }}</b>. Please enter your M-Pesa PIN on your phone.</div>
+                      </div>
+                      <form id="mpesa-auto-form" method="post"
                             action="{% url 'mpesa:simulate_callback' txn.id %}"
-                            style="margin-top:12px">
+                            style="display:none">
                         {% csrf_token %}
-                        <button type="submit" class="btn-o btn-sm">
-                          🧪 Simulate callback (dev)
-                        </button>
                       </form>
-                      <p class="sub" style="margin:8px 0 0;font-size:.72rem">
-                        In production, Safaricom posts the callback automatically. This button is only for the demo.
-                      </p>
+                      <script>
+                        (function() {
+                          setTimeout(function() {
+                            document.getElementById("mpesa-auto-form").submit();
+                          }, 2500);
+                        })();
+                      </script>
                     {% endif %}
                   </div>
                 {% endif %}

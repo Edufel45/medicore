@@ -75,10 +75,6 @@
   <div class="rl"><span>System ID</span><b>{{ patient.sid }}</b></div>
   <div class="rl"><span>Queue</span><b>{{ visit.queue_number }}</b></div>
   <div class="rl"><span>Patient</span><b>{{ patient.full_name }}</b></div>
-  {% if patient.national_id %}
-    <div class="rl"><span>National ID</span><b>{{ patient.national_id }}</b></div>
-  {% endif %}
-  <div class="rl"><span>Phone</span><b>{{ patient.phone }}</b></div>
   <div class="rl">
     <span>SHA status</span>
     <b>
